@@ -1,2 +1,2 @@
-According to https://github.com/lorol/LITTLEFS/tree/master/examples/LITTLEFS_PlatformIO :
-Download mklittlefs from https://github.com/earlephilhower/mklittlefs/releases and saveto this directory
+According to https://github.com/lorol/LittleFS/tree/master/examples/LittleFS_PlatformIO :
+Download mkLittleFS from https://github.com/earlephilhower/mkLittleFS/releases and saveto this directory
