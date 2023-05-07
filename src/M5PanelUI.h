@@ -1,6 +1,11 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 
+#define FONT_SIZE_LABEL 32
+#define FONT_SIZE_STATUS_CENTER 48
+#define FONT_SIZE_STATUS_BOTTOM 36
+#define FONT_SIZE_SYSINFO 15
+
 class M5PanelUIElement;
 
 class M5PanelPage;

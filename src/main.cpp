@@ -6,7 +6,6 @@
 #include <LittleFS.h>
 #include <ezTime.h>
 #include <regex>
-#include "M5PanelWidget.h"
 #include "M5PanelUI.h"
 #include "defs.h"
 
@@ -16,13 +15,10 @@
 
 #define DEBUG true
 
-#define WIDGET_COUNT 6
 #define FONT_CACHE_SIZE 256
 
 // Global vars
 M5EPD_Canvas canvas(&M5.EPD);
-M5PanelWidget *widgets = new M5PanelWidget[WIDGET_COUNT];
-int *navigationPosition = new int[1];
 
 HTTPClient httpClient;
 HTTPClient httpSubscribeClient;
@@ -37,6 +33,7 @@ unsigned long upTime;
 DynamicJsonDocument jsonDoc(60000); // size to be checked
 
 M5PanelPage *rootPage = NULL;
+String currentElement = ""; // TODO store the current widget ID in here
 
 int previousSysInfoMillis = 0;
 int currentSysInfoMillis;
@@ -170,7 +167,6 @@ void updateSiteMap()
     String sitemapStr;
     httpRequest(restUrl + "/sitemaps/" + OPENHAB_SITEMAP, sitemapStr);
     debug(F("updateSiteMap"), "2:" + String(ESP.getFreeHeap()));
-    debug(F("updateSiteMap"), "received sitemap: \n" + sitemapStr);
     deserializeJson(jsonDoc, sitemapStr, DeserializationOption::NestingLimit(50));
     debug(F("updateSiteMap"), "3:" + String(ESP.getFreeHeap()));
 
@@ -189,17 +185,7 @@ void parseSubscriptionData(String jsonDataStr)
     if (!jsonData["widgetId"].isNull()) // Data Widget (subscription)
     {
         debug(F("parseSubscriptionData"), F("Data Widget (subscription)"));
-        byte widgetId = jsonData["widgetId"];
-        String slabel = jsonData["label"];
-        String itemState = jsonData["item"]["state"];
-        String itemName = jsonData["item"]["name"];
-        String itemType = jsonData["item"]["type"];
-        String label = "";
-        String state = "";
-        parseWidgetLabel(slabel, label, state);
-        Serial.println("Update Item " + String(widgetId) + " label=" + label + " state=" + state);
-        widgets[widgetId].update(label, state, itemState, itemName, itemType);
-        widgets[widgetId].draw(UPDATE_MODE_GC16); // UPDATE_MODE_A2
+        // TODO update all widgets and redraw if widget on currently shown page
     }
     else if (!jsonData["TYPE"].isNull())
     {
@@ -374,13 +360,6 @@ void setup()
     Serial.println(F("IP address: "));
     Serial.println(WiFi.localIP());
 
-    // Init widgets
-    for (byte i = 0; i < WIDGET_COUNT; i++)
-    {
-        int x = i % BUTTONS_X;
-        int y = i / BUTTONS_X;
-        widgets[i].init(i, 0, 150 + 40 + x * (40 + BUTTON_SIZE), 40 + y * (40 + BUTTON_SIZE));
-    }
     // NTP stuff
     setInterval(3600);
     waitForSync();
@@ -429,6 +408,7 @@ void loop()
             _last_pos_y = M5.TP.readFingerY(0);
             if (!is_finger_up)
             {
+                /*
                 for (byte i = 0; i < WIDGET_COUNT; i++)
                     if (widgets[i].testIfTouched(_last_pos_x, _last_pos_y)) // TODO put reaction to touch into widget
                     {
@@ -443,7 +423,7 @@ void loop()
                             postWidgetValue(itemName, newValue);
                             // debug("loop","POST values: " + itemName +", " + newValue);
                         }
-                    }
+                    }*/
             }
         }
         M5.TP.flush();

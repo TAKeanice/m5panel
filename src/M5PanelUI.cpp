@@ -5,11 +5,6 @@ M5PanelPage::M5PanelPage(JsonObject json) : M5PanelPage(json, 0) {}
 
 M5PanelPage::M5PanelPage(JsonObject json, int pageIndex)
 {
-    Serial.println("--------------------");
-    Serial.println("Initialize page with json:");
-    serializeJson(json, Serial);
-    Serial.print("\n\n\n");
-
     String titleString = json["title"];
     // the root page has title, the subpages labels
     title = titleString != "null" ? titleString : json["label"];
@@ -39,6 +34,7 @@ M5PanelPage::M5PanelPage(JsonObject json, int pageIndex)
 
 M5PanelPage::~M5PanelPage()
 {
+    Serial.print("delete page: " + title);
     for (size_t i = 0; i < 6; i++)
     {
         delete elements[i];
@@ -112,6 +108,7 @@ M5PanelUIElement::M5PanelUIElement(JsonObject json)
 
 M5PanelUIElement::~M5PanelUIElement()
 {
+    Serial.println("delete element: " + title);
     delete detail;
     delete choices;
 }
