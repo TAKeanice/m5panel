@@ -1,0 +1,350 @@
+{
+    "name": "uicomponents_m5paper",
+    "label": "m5paper",
+    "link": "http://192.168.0.20:8080/rest/sitemaps/uicomponents_m5paper",
+    "homepage": {
+        "id": "uicomponents_m5paper",
+        "title": "m5paper",
+        "link": "http://192.168.0.20:8080/rest/sitemaps/uicomponents_m5paper/uicomponents_m5paper",
+        "leaf": false,
+        "timeout": false,
+        "widgets": [
+            {
+                "widgetId": "00",
+                "type": "Frame",
+                "visibility": true,
+                "label": "Frame1",
+                "icon": "screen",
+                "mappings": [],
+                "widgets": [
+                    {
+                        "widgetId": "0000",
+                        "type": "Text",
+                        "visibility": true,
+                        "label": "text1 [-]",
+                        "icon": "light",
+                        "mappings": [],
+                        "item": {
+                            "link": "http://192.168.0.20:8080/rest/items/ChattyItem1",
+                            "state": "NULL",
+                            "stateDescription": {
+                                "pattern": "%s",
+                                "readOnly": false,
+                                "options": []
+                            },
+                            "type": "String",
+                            "name": "ChattyItem1",
+                            "label": "Chatty1",
+                            "category": "",
+                            "tags": [],
+                            "groupNames": []
+                        },
+                        "widgets": []
+                    },
+                    {
+                        "widgetId": "0001",
+                        "type": "Switch",
+                        "visibility": true,
+                        "label": "Switch1",
+                        "icon": "light",
+                        "mappings": [],
+                        "item": {
+                            "link": "http://192.168.0.20:8080/rest/items/SwitchItem",
+                            "state": "ON",
+                            "type": "Switch",
+                            "name": "SwitchItem",
+                            "label": "Switch1",
+                            "category": "",
+                            "tags": [
+                                "Lightbulb"
+                            ],
+                            "groupNames": []
+                        },
+                        "widgets": []
+                    },
+                    {
+                        "widgetId": "0002",
+                        "type": "Selection",
+                        "visibility": true,
+                        "label": "Selection1",
+                        "icon": "light",
+                        "mappings": [],
+                        "item": {
+                            "link": "http://192.168.0.20:8080/rest/items/SelectItem1",
+                            "state": "3",
+                            "stateDescription": {
+                                "readOnly": false,
+                                "options": [
+                                    {
+                                        "value": "1",
+                                        "label": "Blue"
+                                    },
+                                    {
+                                        "value": "2",
+                                        "label": "Red"
+                                    },
+                                    {
+                                        "value": "3",
+                                        "label": "Yellow"
+                                    }
+                                ]
+                            },
+                            "commandDescription": {
+                                "commandOptions": [
+                                    {
+                                        "command": "1",
+                                        "label": "Blue"
+                                    },
+                                    {
+                                        "command": "2",
+                                        "label": "Red"
+                                    },
+                                    {
+                                        "command": "3",
+                                        "label": "Yellow"
+                                    }
+                                ]
+                            },
+                            "type": "Number:Dimensionless",
+                            "name": "SelectItem1",
+                            "label": "Select",
+                            "category": "",
+                            "tags": [],
+                            "groupNames": []
+                        },
+                        "widgets": []
+                    },
+                    {
+                        "widgetId": "0003",
+                        "type": "Switch",
+                        "visibility": true,
+                        "label": "Select",
+                        "icon": "fan",
+                        "mappings": [
+                            {
+                                "command": "1",
+                                "label": "blue color"
+                            },
+                            {
+                                "command": "2",
+                                "label": "red color"
+                            },
+                            {
+                                "command": "3",
+                                "label": "yellow color"
+                            }
+                        ],
+                        "item": {
+                            "link": "http://192.168.0.20:8080/rest/items/SelectItem1",
+                            "state": "3",
+                            "stateDescription": {
+                                "readOnly": false,
+                                "options": [
+                                    {
+                                        "value": "1",
+                                        "label": "Blue"
+                                    },
+                                    {
+                                        "value": "2",
+                                        "label": "Red"
+                                    },
+                                    {
+                                        "value": "3",
+                                        "label": "Yellow"
+                                    }
+                                ]
+                            },
+                            "commandDescription": {
+                                "commandOptions": [
+                                    {
+                                        "command": "1",
+                                        "label": "Blue"
+                                    },
+                                    {
+                                        "command": "2",
+                                        "label": "Red"
+                                    },
+                                    {
+                                        "command": "3",
+                                        "label": "Yellow"
+                                    }
+                                ]
+                            },
+                            "type": "Number:Dimensionless",
+                            "name": "SelectItem1",
+                            "label": "Select",
+                            "category": "",
+                            "tags": [],
+                            "groupNames": []
+                        },
+                        "widgets": []
+                    }
+                ]
+            },
+            {
+                "widgetId": "01",
+                "type": "Frame",
+                "visibility": true,
+                "label": "Frame2",
+                "icon": "door",
+                "mappings": [],
+                "widgets": [
+                    {
+                        "widgetId": "0100",
+                        "type": "Text",
+                        "visibility": true,
+                        "label": "text2 [-]",
+                        "icon": "text",
+                        "mappings": [],
+                        "item": {
+                            "link": "http://192.168.0.20:8080/rest/items/ChattyItem1",
+                            "state": "NULL",
+                            "stateDescription": {
+                                "pattern": "%s",
+                                "readOnly": false,
+                                "options": []
+                            },
+                            "type": "String",
+                            "name": "ChattyItem1",
+                            "label": "Chatty1",
+                            "category": "",
+                            "tags": [],
+                            "groupNames": []
+                        },
+                        "linkedPage": {
+                            "id": "0100",
+                            "title": "text2 [-]",
+                            "icon": "text",
+                            "link": "http://192.168.0.20:8080/rest/sitemaps/uicomponents_m5paper/0100",
+                            "leaf": true,
+                            "timeout": false,
+                            "widgets": [
+                                {
+                                    "widgetId": "010000",
+                                    "type": "Switch",
+                                    "visibility": true,
+                                    "label": "Switch2",
+                                    "icon": "light",
+                                    "mappings": [],
+                                    "item": {
+                                        "link": "http://192.168.0.20:8080/rest/items/SwitchItem",
+                                        "state": "ON",
+                                        "type": "Switch",
+                                        "name": "SwitchItem",
+                                        "label": "Switch1",
+                                        "category": "",
+                                        "tags": [
+                                            "Lightbulb"
+                                        ],
+                                        "groupNames": []
+                                    },
+                                    "widgets": []
+                                },
+                                {
+                                    "widgetId": "010001",
+                                    "type": "Selection",
+                                    "visibility": true,
+                                    "label": "Selection2",
+                                    "icon": "colorpicker",
+                                    "mappings": [],
+                                    "item": {
+                                        "link": "http://192.168.0.20:8080/rest/items/SelectItem1",
+                                        "state": "3",
+                                        "stateDescription": {
+                                            "readOnly": false,
+                                            "options": [
+                                                {
+                                                    "value": "1",
+                                                    "label": "Blue"
+                                                },
+                                                {
+                                                    "value": "2",
+                                                    "label": "Red"
+                                                },
+                                                {
+                                                    "value": "3",
+                                                    "label": "Yellow"
+                                                }
+                                            ]
+                                        },
+                                        "commandDescription": {
+                                            "commandOptions": [
+                                                {
+                                                    "command": "1",
+                                                    "label": "Blue"
+                                                },
+                                                {
+                                                    "command": "2",
+                                                    "label": "Red"
+                                                },
+                                                {
+                                                    "command": "3",
+                                                    "label": "Yellow"
+                                                }
+                                            ]
+                                        },
+                                        "type": "Number:Dimensionless",
+                                        "name": "SelectItem1",
+                                        "label": "Select",
+                                        "category": "",
+                                        "tags": [],
+                                        "groupNames": []
+                                    },
+                                    "widgets": []
+                                }
+                            ]
+                        },
+                        "widgets": []
+                    },
+                    {
+                        "widgetId": "0101",
+                        "type": "Setpoint",
+                        "visibility": true,
+                        "label": "Setpoint1",
+                        "icon": "line",
+                        "mappings": [],
+                        "minValue": 0.0,
+                        "maxValue": 100.0,
+                        "step": 10.0,
+                        "item": {
+                            "link": "http://192.168.0.20:8080/rest/items/SetpointItem1",
+                            "state": "80",
+                            "type": "Dimmer",
+                            "name": "SetpointItem1",
+                            "label": "Setpoint1",
+                            "category": "",
+                            "tags": [
+                                "LightStripe"
+                            ],
+                            "groupNames": []
+                        },
+                        "widgets": []
+                    },
+                    {
+                        "widgetId": "0102",
+                        "type": "Slider",
+                        "visibility": true,
+                        "label": "Slider1",
+                        "icon": "slider",
+                        "mappings": [],
+                        "switchSupport": true,
+                        "sendFrequency": 0,
+                        "item": {
+                            "link": "http://192.168.0.20:8080/rest/items/SetpointItem1",
+                            "state": "80",
+                            "type": "Dimmer",
+                            "name": "SetpointItem1",
+                            "label": "Setpoint1",
+                            "category": "",
+                            "tags": [
+                                "LightStripe"
+                            ],
+                            "groupNames": []
+                        },
+                        "widgets": []
+                    }
+                ]
+            }
+        ]
+    }
+}
