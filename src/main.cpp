@@ -176,6 +176,8 @@ void updateSiteMap()
     rootPage = new M5PanelPage(rootPageJson);
     jsonDoc.clear();
     debug(F("updateSiteMap"), "5:" + String(ESP.getFreeHeap()));
+
+    rootPage->draw(&canvas);
 }
 
 void parseSubscriptionData(String jsonDataStr)
@@ -184,7 +186,9 @@ void parseSubscriptionData(String jsonDataStr)
     deserializeJson(jsonData, jsonDataStr);
     if (!jsonData["widgetId"].isNull()) // Data Widget (subscription)
     {
-        debug(F("parseSubscriptionData"), F("Data Widget (subscription)"));
+        String widgetId = jsonData["widgetId"];
+        debug(F("parseSubscriptionData"), "Widget changed" + widgetId);
+
         // TODO update all widgets and redraw if widget on currently shown page
     }
     else if (!jsonData["TYPE"].isNull())
@@ -335,7 +339,6 @@ void setup()
 
     Serial.println();
 
-    canvas.createCanvas(160, 540);
     esp_err_t errorCode = canvas.loadFont("/FreeSansBold.ttf", LittleFS);
     // TODO : Should fail and stop if font not found
     Serial.print("Font load exit code:");
@@ -365,7 +368,7 @@ void setup()
     waitForSync();
     setTimeZone();
 
-    displaySidebar();
+    // displaySidebar();
     subscribe();
     updateSiteMap();
 }
@@ -434,9 +437,9 @@ void loop()
     if ((currentSysInfoMillis - previousSysInfoMillis) > 10000)
     {
         previousSysInfoMillis = currentSysInfoMillis;
-        displaySidebar();
-        // debug("loop","Total PSRAM: %d" + String(ESP.getPsramSize()));
-        // debug("loop","Free PSRAM: %d" + String(ESP.getFreePsram()));
+        // displaySidebar();
+        //  debug("loop","Total PSRAM: %d" + String(ESP.getPsramSize()));
+        //  debug("loop","Free PSRAM: %d" + String(ESP.getFreePsram()));
     }
 
     // Full refresh every 10 minutes to clear artefacts

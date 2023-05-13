@@ -1,5 +1,6 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
+#include <M5EPD.h>
 
 #define FONT_SIZE_LABEL 32
 #define FONT_SIZE_STATUS_CENTER 48
@@ -21,25 +22,11 @@ enum class M5PanelElementType
     Text
 };
 
-class M5PanelUIElement
-{
-public:
-    M5PanelElementType type;
-    String title;
-    String icon;
-    String state;
-    M5PanelPage *parent = NULL;
-    M5PanelPage *detail = NULL;
-    M5PanelPage *choices = NULL;
-
-    M5PanelUIElement(JsonObject json);
-    ~M5PanelUIElement();
-};
-
 class M5PanelPage
 {
 private:
     M5PanelPage(JsonObject json, int pageIndex);
+    void drawNavigation(M5EPD_Canvas *canvas);
 
 public:
     String title;
@@ -50,4 +37,23 @@ public:
 
     M5PanelPage(JsonObject json);
     ~M5PanelPage();
+
+    void draw(M5EPD_Canvas *canvas);
+};
+
+class M5PanelUIElement
+{
+public:
+    M5PanelElementType type;
+    String title; // TODO replace with fixed-length char[]
+    String icon;  // TODO replace with fixed-length char[]
+    String state; // TODO replace with fixed-length char[]
+    M5PanelPage *parent = NULL;
+    M5PanelPage *detail = NULL;
+    M5PanelPage *choices = NULL;
+
+    M5PanelUIElement(JsonObject json);
+    ~M5PanelUIElement();
+
+    void draw(M5EPD_Canvas *canvas, int x, int y, int size);
 };
