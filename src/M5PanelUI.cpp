@@ -19,11 +19,10 @@
 #define NAV_WIDTH 150
 #define NAV_MARGIN_TOP_BOTTOM 100
 
-// ELEMENT_AREA_SIZE - 2 * MARGIN
-#define ELEMENT_SIZE 240
-
 #define ELEMENT_CONTROL_HEIGHT 80
 #define FONT_SIZE_ELEMENT_TITLE 32
+
+#define LINE_THICKNESS 3
 
 // M5PanelPage
 
@@ -191,32 +190,62 @@ M5PanelUIElement::~M5PanelUIElement()
 
 void M5PanelUIElement::draw(M5EPD_Canvas *canvas, int x, int y, int size)
 {
-    canvas->createCanvas(size, size);
+    canvas->createCanvas(size - 2 * MARGIN, size - 2 * MARGIN);
     canvas->clear();
 
-    int thickness = 3;
-    int radius = 10;
+    int elementSize = size - 2 * MARGIN;
 
-    canvas->fillRoundRect(MARGIN, MARGIN, ELEMENT_SIZE, ELEMENT_SIZE, radius, 15);
-    canvas->fillRoundRect(MARGIN + thickness, MARGIN + thickness, ELEMENT_SIZE - 2 * thickness, ELEMENT_SIZE - 2 * thickness, radius - thickness, 0);
+    drawFrame(canvas, elementSize);
 
-    Serial.print("Drawing title: ");
-    Serial.println(title);
+    drawIcon(canvas, elementSize);
 
-    canvas->setTextSize(FONT_SIZE_LABEL);
-    canvas->setTextDatum(TC_DATUM);
-    canvas->drawString(title, ELEMENT_AREA_SIZE / 2, 2 * MARGIN);
+    drawTitle(canvas, elementSize);
 
-    int controlY = ELEMENT_AREA_SIZE - MARGIN - ELEMENT_CONTROL_HEIGHT;
-    canvas->drawLine(MARGIN, controlY, ELEMENT_SIZE + MARGIN - thickness, controlY, thickness, 15);
+    drawStatusAndControlArea(canvas, elementSize);
 
-    canvas->setTextSize(FONT_SIZE_STATUS_CENTER);
-    canvas->setTextDatum(ML_DATUM);
-    canvas->drawString("-", 2 * MARGIN, controlY + ELEMENT_CONTROL_HEIGHT / 2);
-    canvas->setTextDatum(MR_DATUM);
-    canvas->drawString("+", ELEMENT_SIZE, controlY + ELEMENT_CONTROL_HEIGHT / 2);
-
-    canvas->pushCanvas(x, y, UPDATE_MODE_DU);
+    canvas->pushCanvas(x + MARGIN, y + MARGIN, UPDATE_MODE_DU);
 }
 
-// void M5PanelUIElement::drawStatusArea(...)
+void M5PanelUIElement::drawFrame(M5EPD_Canvas *canvas, int elementSize)
+{
+    int radius = 10;
+
+    int innerRectStart = LINE_THICKNESS;
+    int innerRectSize = elementSize - 2 * LINE_THICKNESS;
+    int innerRadius = radius - LINE_THICKNESS;
+    canvas->fillRoundRect(0, 0, elementSize, elementSize, radius, 15);
+    canvas->fillRoundRect(innerRectStart, innerRectStart, innerRectSize, innerRectSize, innerRadius, 0);
+}
+
+void M5PanelUIElement::drawTitle(M5EPD_Canvas *canvas, int elementSize)
+{
+    int elementCenter = elementSize / 2;
+    canvas->setTextSize(FONT_SIZE_LABEL);
+    canvas->setTextDatum(TC_DATUM);
+    canvas->drawString(title, elementCenter, MARGIN);
+}
+
+void M5PanelUIElement::drawIcon(M5EPD_Canvas *canvas, int size)
+{
+    // TODO
+}
+
+void M5PanelUIElement::drawStatusAndControlArea(M5EPD_Canvas *canvas, int elementSize)
+{
+    int elementCenter = elementSize / 2;
+    int controlY = elementSize - ELEMENT_CONTROL_HEIGHT;
+    int controlYCenter = controlY + ELEMENT_CONTROL_HEIGHT / 2;
+
+    // TODO draw only if controllable directly (setpoint / slider)
+    canvas->drawLine(0, controlY, elementSize - LINE_THICKNESS, controlY, LINE_THICKNESS, 15);
+    canvas->setTextSize(FONT_SIZE_STATUS_CENTER);
+    canvas->setTextDatum(ML_DATUM);
+    canvas->drawString("-", MARGIN, controlYCenter);
+    canvas->setTextDatum(MR_DATUM);
+    canvas->drawString("+", elementSize - MARGIN, controlYCenter);
+
+    // TODO draw only if status exists (not frame)
+    canvas->setTextSize(FONT_SIZE_LABEL);
+    canvas->setTextDatum(MC_DATUM);
+    canvas->drawString(state, elementCenter, controlYCenter);
+}

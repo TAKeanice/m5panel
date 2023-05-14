@@ -44,6 +44,12 @@ public:
 
 class M5PanelUIElement
 {
+private:
+    void drawFrame(M5EPD_Canvas *canvas, int size);
+    void drawTitle(M5EPD_Canvas *canvas, int size);
+    void drawIcon(M5EPD_Canvas *canvas, int size);
+    void drawStatusAndControlArea(M5EPD_Canvas *canvas, int size);
+
 public:
     M5PanelElementType type;
     String title; // TODO replace with fixed-length char[]
