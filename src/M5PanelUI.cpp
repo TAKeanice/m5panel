@@ -220,9 +220,24 @@ void M5PanelUIElement::drawFrame(M5EPD_Canvas *canvas, int elementSize)
 void M5PanelUIElement::drawTitle(M5EPD_Canvas *canvas, int elementSize)
 {
     int elementCenter = elementSize / 2;
+    int titleY;
+    uint8_t alignment;
+    switch (type)
+    {
+    case M5PanelElementType::Choice:
+    case M5PanelElementType::Frame:
+        titleY = elementCenter;
+        alignment = MC_DATUM;
+        break;
+    default:
+        titleY = MARGIN;
+        alignment = TC_DATUM;
+        break;
+    }
+
     canvas->setTextSize(FONT_SIZE_LABEL);
-    canvas->setTextDatum(TC_DATUM);
-    canvas->drawString(title, elementCenter, MARGIN);
+    canvas->setTextDatum(alignment);
+    canvas->drawString(title, elementCenter, titleY);
 }
 
 void M5PanelUIElement::drawIcon(M5EPD_Canvas *canvas, int size)
@@ -236,16 +251,29 @@ void M5PanelUIElement::drawStatusAndControlArea(M5EPD_Canvas *canvas, int elemen
     int controlY = elementSize - ELEMENT_CONTROL_HEIGHT;
     int controlYCenter = controlY + ELEMENT_CONTROL_HEIGHT / 2;
 
-    // TODO draw only if controllable directly (setpoint / slider)
-    canvas->drawLine(0, controlY, elementSize - LINE_THICKNESS, controlY, LINE_THICKNESS, 15);
-    canvas->setTextSize(FONT_SIZE_STATUS_CENTER);
-    canvas->setTextDatum(ML_DATUM);
-    canvas->drawString("-", MARGIN, controlYCenter);
-    canvas->setTextDatum(MR_DATUM);
-    canvas->drawString("+", elementSize - MARGIN, controlYCenter);
+    // clear previous status content
+    canvas->fillRect(MARGIN, controlY + MARGIN, elementSize - 2 * MARGIN, ELEMENT_CONTROL_HEIGHT - 2 * MARGIN, 0);
 
-    // TODO draw only if status exists (not frame)
-    canvas->setTextSize(FONT_SIZE_LABEL);
-    canvas->setTextDatum(MC_DATUM);
-    canvas->drawString(state, elementCenter, controlYCenter);
+    switch (type)
+    {
+    case M5PanelElementType::Slider:
+    case M5PanelElementType::Setpoint:
+        // draw +/- symbols
+        canvas->setTextSize(FONT_SIZE_STATUS_CENTER);
+        canvas->setTextDatum(ML_DATUM);
+        canvas->drawString("-", MARGIN, controlYCenter);
+        canvas->setTextDatum(MR_DATUM);
+        canvas->drawString("+", elementSize - MARGIN, controlYCenter);
+    case M5PanelElementType::Selection:
+    case M5PanelElementType::Switch:
+    case M5PanelElementType::Text:
+        // draw status
+        canvas->setTextSize(FONT_SIZE_LABEL);
+        canvas->setTextDatum(MC_DATUM);
+        canvas->drawString(state, elementCenter, controlYCenter);
+        // draw divider
+        canvas->drawLine(0, controlY, elementSize - LINE_THICKNESS, controlY, LINE_THICKNESS, 15);
+    default:
+        break;
+    }
 }
