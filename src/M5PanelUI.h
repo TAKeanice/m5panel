@@ -25,6 +25,7 @@ enum class M5PanelElementType
 class M5PanelPage
 {
 private:
+    size_t numElements;
     M5PanelPage(JsonObject json, int pageIndex);
     void drawNavigation(M5EPD_Canvas *canvas);
 

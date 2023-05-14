@@ -3,7 +3,7 @@
 
 // Constants
 
-#define NUM_ELEMENTS 6
+#define MAX_ELEMENTS 6
 
 #define ELEMENT_ROWS 2
 #define ELEMENT_COLS 3
@@ -13,7 +13,7 @@
 
 #define MARGIN 10
 
-// PANEL_HEIGHT / ELEMENT_ROWS - 2 * MARGIN
+// PANEL_HEIGHT / ELEMENT_ROWS - MARGIN
 #define ELEMENT_AREA_SIZE 260
 // PANEL_WIDTH - ELEMENT_COLS * ELEMENT_AREA_SIZE - 2 * MARGIN
 #define NAV_WIDTH 150
@@ -23,7 +23,7 @@
 #define ELEMENT_SIZE 240
 
 #define ELEMENT_CONTROL_HEIGHT 80
-#define ELEMENT_TITLE_HEIGHT 40
+#define FONT_SIZE_ELEMENT_TITLE 32
 
 // M5PanelPage
 
@@ -39,8 +39,10 @@ M5PanelPage::M5PanelPage(JsonObject json, int pageIndex)
 
     Serial.println("Initialized page: " + title + " (number " + (pageIndex + 1) + ")");
 
+    numElements = min((size_t)MAX_ELEMENTS, widgets.size() - pageOffset);
+
     // initialize elements on page
-    for (size_t i = 0; i < min((size_t)NUM_ELEMENTS, widgets.size() - pageOffset); i++)
+    for (size_t i = 0; i < numElements; i++)
     {
         JsonObject elementJson = widgets[pageOffset + i];
         elements[i] = new M5PanelUIElement(elementJson);
@@ -48,7 +50,7 @@ M5PanelPage::M5PanelPage(JsonObject json, int pageIndex)
     }
 
     // initialize additional pages if necessary
-    if (widgets.size() - pageOffset <= NUM_ELEMENTS)
+    if (widgets.size() - pageOffset <= MAX_ELEMENTS)
     {
         // no additional pages needed
         return;
@@ -61,7 +63,7 @@ M5PanelPage::M5PanelPage(JsonObject json, int pageIndex)
 M5PanelPage::~M5PanelPage()
 {
     Serial.print("delete page: " + title);
-    for (size_t i = 0; i < NUM_ELEMENTS; i++)
+    for (size_t i = 0; i < MAX_ELEMENTS; i++)
     {
         delete elements[i];
     }
@@ -72,7 +74,7 @@ M5PanelPage::~M5PanelPage()
 void M5PanelPage::draw(M5EPD_Canvas *canvas)
 {
     drawNavigation(canvas);
-    for (size_t i = 0; i < NUM_ELEMENTS; i++)
+    for (size_t i = 0; i < numElements; i++)
     {
         int y = MARGIN + (i / ELEMENT_COLS) * ELEMENT_AREA_SIZE;
         int x = NAV_WIDTH + MARGIN + (i % ELEMENT_COLS) * ELEMENT_AREA_SIZE;
@@ -198,5 +200,23 @@ void M5PanelUIElement::draw(M5EPD_Canvas *canvas, int x, int y, int size)
     canvas->fillRoundRect(MARGIN, MARGIN, ELEMENT_SIZE, ELEMENT_SIZE, radius, 15);
     canvas->fillRoundRect(MARGIN + thickness, MARGIN + thickness, ELEMENT_SIZE - 2 * thickness, ELEMENT_SIZE - 2 * thickness, radius - thickness, 0);
 
+    Serial.print("Drawing title: ");
+    Serial.println(title);
+
+    canvas->setTextSize(FONT_SIZE_LABEL);
+    canvas->setTextDatum(TC_DATUM);
+    canvas->drawString(title, ELEMENT_AREA_SIZE / 2, 2 * MARGIN);
+
+    int controlY = ELEMENT_AREA_SIZE - MARGIN - ELEMENT_CONTROL_HEIGHT;
+    canvas->drawLine(MARGIN, controlY, ELEMENT_SIZE + MARGIN - thickness, controlY, thickness, 15);
+
+    canvas->setTextSize(FONT_SIZE_STATUS_CENTER);
+    canvas->setTextDatum(ML_DATUM);
+    canvas->drawString("-", 2 * MARGIN, controlY + ELEMENT_CONTROL_HEIGHT / 2);
+    canvas->setTextDatum(MR_DATUM);
+    canvas->drawString("+", ELEMENT_SIZE, controlY + ELEMENT_CONTROL_HEIGHT / 2);
+
     canvas->pushCanvas(x, y, UPDATE_MODE_DU);
 }
+
+// void M5PanelUIElement::drawStatusArea(...)
