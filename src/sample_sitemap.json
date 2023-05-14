@@ -21,12 +21,12 @@
                         "widgetId": "0000",
                         "type": "Text",
                         "visibility": true,
-                        "label": "text1 [-]",
+                        "label": "text1 [CLOSED]",
                         "icon": "light",
                         "mappings": [],
                         "item": {
                             "link": "http://192.168.0.20:8080/rest/items/ChattyItem1",
-                            "state": "NULL",
+                            "state": "CLOSED",
                             "stateDescription": {
                                 "pattern": "%s",
                                 "readOnly": false,
@@ -178,6 +178,102 @@
                             "groupNames": []
                         },
                         "widgets": []
+                    },
+                    {
+                        "widgetId": "0004",
+                        "type": "Text",
+                        "visibility": true,
+                        "label": "text1.2 [CLOSED]",
+                        "icon": "",
+                        "mappings": [],
+                        "item": {
+                            "link": "http://192.168.0.20:8080/rest/items/ChattyItem1",
+                            "state": "CLOSED",
+                            "stateDescription": {
+                                "pattern": "%s",
+                                "readOnly": false,
+                                "options": []
+                            },
+                            "type": "String",
+                            "name": "ChattyItem1",
+                            "label": "Chatty1",
+                            "category": "",
+                            "tags": [],
+                            "groupNames": []
+                        },
+                        "widgets": []
+                    },
+                    {
+                        "widgetId": "0005",
+                        "type": "Text",
+                        "visibility": true,
+                        "label": "text1.2 [CLOSED]",
+                        "icon": "",
+                        "mappings": [],
+                        "item": {
+                            "link": "http://192.168.0.20:8080/rest/items/ChattyItem1",
+                            "state": "CLOSED",
+                            "stateDescription": {
+                                "pattern": "%s",
+                                "readOnly": false,
+                                "options": []
+                            },
+                            "type": "String",
+                            "name": "ChattyItem1",
+                            "label": "Chatty1",
+                            "category": "",
+                            "tags": [],
+                            "groupNames": []
+                        },
+                        "widgets": []
+                    },
+                    {
+                        "widgetId": "0006",
+                        "type": "Text",
+                        "visibility": true,
+                        "label": "text1.2 [CLOSED]",
+                        "icon": "",
+                        "mappings": [],
+                        "item": {
+                            "link": "http://192.168.0.20:8080/rest/items/ChattyItem1",
+                            "state": "CLOSED",
+                            "stateDescription": {
+                                "pattern": "%s",
+                                "readOnly": false,
+                                "options": []
+                            },
+                            "type": "String",
+                            "name": "ChattyItem1",
+                            "label": "Chatty1",
+                            "category": "",
+                            "tags": [],
+                            "groupNames": []
+                        },
+                        "widgets": []
+                    },
+                    {
+                        "widgetId": "0007",
+                        "type": "Text",
+                        "visibility": true,
+                        "label": "text1.2 [CLOSED]",
+                        "icon": "",
+                        "mappings": [],
+                        "item": {
+                            "link": "http://192.168.0.20:8080/rest/items/ChattyItem1",
+                            "state": "CLOSED",
+                            "stateDescription": {
+                                "pattern": "%s",
+                                "readOnly": false,
+                                "options": []
+                            },
+                            "type": "String",
+                            "name": "ChattyItem1",
+                            "label": "Chatty1",
+                            "category": "",
+                            "tags": [],
+                            "groupNames": []
+                        },
+                        "widgets": []
                     }
                 ]
             },
@@ -193,12 +289,12 @@
                         "widgetId": "0100",
                         "type": "Text",
                         "visibility": true,
-                        "label": "text2 [-]",
+                        "label": "text2 [CLOSED]",
                         "icon": "text",
                         "mappings": [],
                         "item": {
                             "link": "http://192.168.0.20:8080/rest/items/ChattyItem1",
-                            "state": "NULL",
+                            "state": "CLOSED",
                             "stateDescription": {
                                 "pattern": "%s",
                                 "readOnly": false,
@@ -213,7 +309,7 @@
                         },
                         "linkedPage": {
                             "id": "0100",
-                            "title": "text2 [-]",
+                            "title": "text2 [CLOSED]",
                             "icon": "text",
                             "link": "http://192.168.0.20:8080/rest/sitemaps/uicomponents_m5paper/0100",
                             "leaf": true,

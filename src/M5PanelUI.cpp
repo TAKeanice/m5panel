@@ -11,16 +11,16 @@
 #define PANEL_WIDTH 960
 #define PANEL_HEIGHT 540
 
-#define MARGIN 5
+#define MARGIN 10
 
 // PANEL_HEIGHT / ELEMENT_ROWS - 2 * MARGIN
 #define ELEMENT_AREA_SIZE 260
 // PANEL_WIDTH - ELEMENT_COLS * ELEMENT_AREA_SIZE - 2 * MARGIN
-#define NAV_WIDTH 200
+#define NAV_WIDTH 150
 #define NAV_MARGIN_TOP_BOTTOM 100
 
 // ELEMENT_AREA_SIZE - 2 * MARGIN
-#define ELEMENT_SIZE 250
+#define ELEMENT_SIZE 240
 
 #define ELEMENT_CONTROL_HEIGHT 80
 #define ELEMENT_TITLE_HEIGHT 40
@@ -75,28 +75,44 @@ void M5PanelPage::draw(M5EPD_Canvas *canvas)
     for (size_t i = 0; i < NUM_ELEMENTS; i++)
     {
         int y = MARGIN + (i / ELEMENT_COLS) * ELEMENT_AREA_SIZE;
-        int x = MARGIN + (i % ELEMENT_COLS) * ELEMENT_AREA_SIZE;
+        int x = NAV_WIDTH + MARGIN + (i % ELEMENT_COLS) * ELEMENT_AREA_SIZE;
         elements[i]->draw(canvas, x, y, ELEMENT_AREA_SIZE);
     }
 }
 
 void M5PanelPage::drawNavigation(M5EPD_Canvas *canvas)
 {
-    canvas->createCanvas(NAV_WIDTH * 2, PANEL_HEIGHT - 2 * NAV_MARGIN_TOP_BOTTOM);
-    canvas->clear();
-    canvas->fillTriangle(40, 90, 100, 30, 160, 90, 15);
-    canvas->fillTriangle(40, 130, 160, 130, 100, 190, 15);
-    canvas->fillTriangle(60, 260, 140, 225, 140, 295, 15);
+    int arrowAreaHeight = PANEL_HEIGHT - 2 * NAV_MARGIN_TOP_BOTTOM;
 
-    if (next != NULL)
-    {
-    }
-    if (previous != NULL)
-    {
-    }
-    if (parent != NULL)
-    {
-    }
+    canvas->createCanvas(NAV_WIDTH * 2, arrowAreaHeight);
+    canvas->clear();
+
+    void (M5EPD_Canvas::*next_triangle)(int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, uint32_t);
+    next_triangle = next != NULL ? &M5EPD_Canvas::fillTriangle : &M5EPD_Canvas::drawTriangle;
+
+    void (M5EPD_Canvas::*previous_triangle)(int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, uint32_t);
+    previous_triangle = previous != NULL ? &M5EPD_Canvas::fillTriangle : &M5EPD_Canvas::drawTriangle;
+
+    void (M5EPD_Canvas::*back_triangle)(int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, uint32_t);
+    back_triangle = parent != NULL ? &M5EPD_Canvas::fillTriangle : &M5EPD_Canvas::drawTriangle;
+
+    int arrowMargin = NAV_WIDTH / 5;
+    int arrowHeight = (arrowAreaHeight - arrowMargin) / 3;
+    int arrowMiddle = NAV_WIDTH / 2;
+    int arrowRight = NAV_WIDTH - arrowMargin;
+
+    int secondArrowTop = arrowHeight + arrowMargin;
+    int secondArrowBottom = 2 * arrowHeight;
+
+    int backArrowLeft = arrowMargin + arrowMargin / 2;
+    int backArrowTop = secondArrowBottom + arrowMargin;
+    int backArrowLeftY = backArrowTop + arrowHeight / 2;
+    int backArrowRight = NAV_WIDTH - backArrowLeft;
+    int backArrowBottom = backArrowTop + arrowHeight;
+
+    (canvas->*next_triangle)(arrowMargin, arrowHeight, arrowMiddle, arrowMargin, arrowRight, arrowHeight, 15);
+    (canvas->*previous_triangle)(arrowMargin, secondArrowTop, arrowRight, secondArrowTop, arrowMiddle, secondArrowBottom, 15);
+    (canvas->*back_triangle)(backArrowLeft, backArrowLeftY, backArrowRight, backArrowTop + 5, backArrowRight, backArrowBottom - 5, 15);
 
     canvas->pushCanvas(0, NAV_MARGIN_TOP_BOTTOM, UPDATE_MODE_DU);
 }
@@ -173,4 +189,14 @@ M5PanelUIElement::~M5PanelUIElement()
 
 void M5PanelUIElement::draw(M5EPD_Canvas *canvas, int x, int y, int size)
 {
+    canvas->createCanvas(size, size);
+    canvas->clear();
+
+    int thickness = 3;
+    int radius = 10;
+
+    canvas->fillRoundRect(MARGIN, MARGIN, ELEMENT_SIZE, ELEMENT_SIZE, radius, 15);
+    canvas->fillRoundRect(MARGIN + thickness, MARGIN + thickness, ELEMENT_SIZE - 2 * thickness, ELEMENT_SIZE - 2 * thickness, radius - thickness, 0);
+
+    canvas->pushCanvas(x, y, UPDATE_MODE_DU);
 }
