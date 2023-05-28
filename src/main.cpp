@@ -405,29 +405,21 @@ void loop()
     {
         M5.TP.update();
         bool is_finger_up = M5.TP.isFingerUp();
-        if (is_finger_up || (_last_pos_x != M5.TP.readFingerX(0)) || (_last_pos_y != M5.TP.readFingerY(0)))
+        if (is_finger_up)
+        {
+            if (_last_pos_x != 0xFFFF && _last_pos_y != 0xFFFF)
+            {
+
+                // process touch on finger lifting
+                rootPage->processTouch(currentElement, _last_pos_x, _last_pos_y, &canvas);
+
+                _last_pos_x = _last_pos_y = 0xFFFF;
+            }
+        }
+        else
         {
             _last_pos_x = M5.TP.readFingerX(0);
             _last_pos_y = M5.TP.readFingerY(0);
-            if (!is_finger_up)
-            {
-                /*
-                for (byte i = 0; i < WIDGET_COUNT; i++)
-                    if (widgets[i].testIfTouched(_last_pos_x, _last_pos_y)) // TODO put reaction to touch into widget
-                    {
-                        // debug("loop","Widget touched: " + String(i));
-                        String itemName;
-                        String newValue;
-                        widgets[i].getTouchedValues(itemName, newValue);
-                        // debug("loop","Touched values: " + itemName +", " + newValue);
-                        if (!newValue.isEmpty())
-                        {
-                            widgets[i].drawPushedBorder(UPDATE_MODE_A2);
-                            postWidgetValue(itemName, newValue);
-                            // debug("loop","POST values: " + itemName +", " + newValue);
-                        }
-                    }*/
-            }
         }
         M5.TP.flush();
     }

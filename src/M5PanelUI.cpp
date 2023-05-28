@@ -30,6 +30,8 @@ M5PanelPage::M5PanelPage(JsonObject json) : M5PanelPage(json, 0) {}
 
 M5PanelPage::M5PanelPage(JsonObject json, int pageIndex)
 {
+    identifier = json["widgetId"].as<String>() + "_" + pageIndex;
+
     String titleString = json["title"];
     // the root page has title, the subpages labels
     title = titleString != "null" ? titleString : json["label"];
@@ -85,7 +87,7 @@ void M5PanelPage::drawNavigation(M5EPD_Canvas *canvas)
 {
     int arrowAreaHeight = PANEL_HEIGHT - 2 * NAV_MARGIN_TOP_BOTTOM;
 
-    canvas->createCanvas(NAV_WIDTH * 2, arrowAreaHeight);
+    canvas->createCanvas(NAV_WIDTH, arrowAreaHeight);
     canvas->clear();
 
     void (M5EPD_Canvas::*next_triangle)(int32_t, int32_t, int32_t, int32_t, int32_t, int32_t, uint32_t);
@@ -118,6 +120,83 @@ void M5PanelPage::drawNavigation(M5EPD_Canvas *canvas)
     canvas->pushCanvas(0, NAV_MARGIN_TOP_BOTTOM, UPDATE_MODE_DU);
 }
 
+String M5PanelPage::processTouch(String currentElement, uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
+{
+    if (currentElement == identifier)
+    {
+        if (x <= NAV_WIDTH)
+        {
+            // touch within navigation area
+            if (NAV_MARGIN_TOP_BOTTOM > y || y > PANEL_HEIGHT - NAV_MARGIN_TOP_BOTTOM)
+            {
+                return identifier; // not touched on arrows
+            }
+            int arrow = ((y - NAV_MARGIN_TOP_BOTTOM) * 3) / (PANEL_HEIGHT - 2 * NAV_MARGIN_TOP_BOTTOM);
+            M5PanelPage *toDraw = NULL;
+            switch (arrow)
+            {
+            case 0:
+                toDraw = next;
+                break;
+            case 1:
+                toDraw = previous;
+                break;
+            case 2:
+                toDraw = parent == NULL ? NULL : parent->parent;
+                break;
+            default:
+                toDraw = NULL;
+            }
+            Serial.println("Touched navigation button " + arrow);
+            if (toDraw == NULL)
+            {
+                return identifier;
+            }
+            else
+            {
+                toDraw->draw(canvas);
+                return toDraw->identifier;
+            }
+        }
+        else
+        {
+            int elementIndexX = (x - NAV_WIDTH) / ELEMENT_AREA_SIZE;
+            int elementIndexY = y / ELEMENT_AREA_SIZE;
+            int elementIndex = (elementIndexX + 1) * (elementIndexY + 1) - 1;
+            int originX = elementIndexX * ELEMENT_AREA_SIZE + NAV_WIDTH;
+            int originY = elementIndexY * ELEMENT_AREA_SIZE;
+            if (elementIndex < numElements)
+            {
+                return elements[elementIndex]->processTouch(x - originX, y - originY, canvas);
+            }
+            return identifier;
+        }
+    }
+    else
+    {
+        // iterate through next pages and let them process the touch
+        String newCurrentElement = "";
+        if (next != NULL)
+        {
+            newCurrentElement = next->processTouch(currentElement, x, y, canvas);
+        }
+        if (newCurrentElement != "")
+        {
+            return newCurrentElement;
+        }
+        // since none of the following pages could process the touch either, let child pages process it
+        for (size_t i = 0; i < numElements; i++)
+        {
+            newCurrentElement = elements[i]->forwardTouch(currentElement, x, y, canvas);
+            if (newCurrentElement != "")
+            {
+                return newCurrentElement;
+            }
+        }
+        return "";
+    }
+}
+
 // M5PanelUIElement
 
 M5PanelUIElement::M5PanelUIElement(JsonObject json)
@@ -126,6 +205,8 @@ M5PanelUIElement::M5PanelUIElement(JsonObject json)
     icon = json["icon"].as<String>();
 
     // TODO store item with stateDescription, commandDescription
+
+    identifier = json["widgetId"].as<String>();
 
     String stateString = json["item"]["state"];
     state = stateString == "NULL" ? "" : stateString; // TODO use mappings and format from sitemap
@@ -226,6 +307,7 @@ void M5PanelUIElement::drawTitle(M5EPD_Canvas *canvas, int elementSize)
     {
     case M5PanelElementType::Choice:
     case M5PanelElementType::Frame:
+        // TODO allow multiple lines in Frames
         titleY = elementCenter;
         alignment = MC_DATUM;
         break;
@@ -275,5 +357,41 @@ void M5PanelUIElement::drawStatusAndControlArea(M5EPD_Canvas *canvas, int elemen
         canvas->drawLine(0, controlY, elementSize - LINE_THICKNESS, controlY, LINE_THICKNESS, 15);
     default:
         break;
+    }
+}
+
+String M5PanelUIElement::forwardTouch(String currentElement, uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
+{
+    if (choices != NULL)
+    {
+        String newCurrentElement = choices->processTouch(currentElement, x, y, canvas);
+        if (newCurrentElement != "")
+        {
+            return newCurrentElement;
+        }
+    }
+
+    if (detail != NULL)
+    {
+        String newCurrentElement = detail->processTouch(currentElement, x, y, canvas);
+        if (newCurrentElement != "")
+        {
+            return newCurrentElement;
+        }
+    }
+
+    // touch does not concern choices nor detail page of this item
+    return "";
+}
+
+String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
+{
+    // TODO process touch on title / icon or control area for interaction
+    Serial.printf("Touched on item %s with coordinates (%d,%d) (relative to element frame)", identifier, x, y);
+    // for now just assume we navigated
+    if (detail != NULL)
+    {
+        detail->draw(canvas);
+        return detail->identifier;
     }
 }

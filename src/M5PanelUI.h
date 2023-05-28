@@ -36,10 +36,17 @@ public:
     M5PanelPage *next = NULL;
     M5PanelUIElement *parent = NULL;
 
+    String identifier = "";
+
     M5PanelPage(JsonObject json);
     ~M5PanelPage();
 
     void draw(M5EPD_Canvas *canvas);
+
+    /**
+     * react to touch in a certain place and return the new currentElement
+     */
+    String processTouch(String currentElement, uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
 };
 
 class M5PanelUIElement
@@ -59,8 +66,13 @@ public:
     M5PanelPage *detail = NULL;
     M5PanelPage *choices = NULL;
 
+    String identifier = "";
+
     M5PanelUIElement(JsonObject json);
     ~M5PanelUIElement();
 
     void draw(M5EPD_Canvas *canvas, int x, int y, int size);
+
+    String forwardTouch(String currentElement, uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
+    String processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
 };
