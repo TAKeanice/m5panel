@@ -30,7 +30,7 @@ M5PanelPage::M5PanelPage(JsonObject json) : M5PanelPage(json, 0) {}
 
 M5PanelPage::M5PanelPage(JsonObject json, int pageIndex)
 {
-    identifier = json["widgetId"].as<String>() + "_" + pageIndex;
+    identifier = (json["widgetId"].isNull() ? json["id"] : json["widgetId"]).as<String>() + "_" + pageIndex;
 
     String titleString = json["title"];
     // the root page has title, the subpages labels
