@@ -24,17 +24,39 @@
 
 #define LINE_THICKNESS 3
 
+// Utility functions
+
+String parseWidgetLabel(String sitemapLabel)
+{
+    int openingBracket = sitemapLabel.lastIndexOf('[');
+    int closingBracket = sitemapLabel.lastIndexOf(']');
+    String label;
+    if (openingBracket == -1 || closingBracket == -1) // Value not found
+    {
+        label = sitemapLabel;
+    }
+    else
+    {
+        label = sitemapLabel.substring(0, openingBracket);
+    }
+    label.trim();
+    return label;
+}
+
 // M5PanelPage
 
 M5PanelPage::M5PanelPage(JsonObject json) : M5PanelPage(json, 0) {}
 
 M5PanelPage::M5PanelPage(JsonObject json, int pageIndex)
 {
-    identifier = (json["widgetId"].isNull() ? json["id"] : json["widgetId"]).as<String>() + "_" + pageIndex;
+    String widgetId = json["widgetId"].isNull() ? "" : json["widgetId"].as<String>();
+    String id = json["id"].isNull() ? "" : json["id"].as<String>();
+    identifier = id + widgetId + "_" + pageIndex;
 
-    String titleString = json["title"];
     // the root page has title, the subpages labels
-    title = titleString != "null" ? titleString : json["label"];
+    String label = json["label"].isNull() ? "" : json["label"].as<String>();
+    String titleString = json["title"].isNull() ? "" : json["title"].as<String>();
+    title = parseWidgetLabel(label + titleString);
     JsonArray widgets = json["widgets"];
     size_t pageOffset = pageIndex * 6;
 
@@ -93,6 +115,19 @@ void M5PanelPage::draw(M5EPD_Canvas *canvas)
 
 void M5PanelPage::drawNavigation(M5EPD_Canvas *canvas)
 {
+    // page title
+    canvas->createCanvas(NAV_WIDTH, NAV_MARGIN_TOP_BOTTOM);
+    canvas->setTextSize(FONT_SIZE_LABEL);
+    canvas->setTextArea(MARGIN, MARGIN, NAV_WIDTH, NAV_MARGIN_TOP_BOTTOM);
+    canvas->setTextWrap(true);
+    canvas->setTextColor(15);
+    canvas->println(title);
+    Serial.printf("Title drawn: %s\n", title);
+    canvas->pushCanvas(MARGIN, MARGIN, UPDATE_MODE_GLR16);
+    canvas->deleteCanvas();
+
+    // navigation arrows
+
     int arrowAreaHeight = PANEL_HEIGHT - 2 * NAV_MARGIN_TOP_BOTTOM;
 
     canvas->createCanvas(NAV_WIDTH, arrowAreaHeight);
@@ -220,7 +255,7 @@ String M5PanelPage::processTouch(String currentElement, uint16_t x, uint16_t y, 
 
 M5PanelUIElement::M5PanelUIElement(JsonObject json)
 {
-    title = json["label"].as<String>(); // TODO if empty -> item label?
+    title = parseWidgetLabel(json["label"].as<String>()); // TODO if empty -> item label?
     icon = json["icon"].as<String>();
 
     // TODO store item with stateDescription, commandDescription
