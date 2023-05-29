@@ -74,7 +74,15 @@ M5PanelPage::~M5PanelPage()
 
 void M5PanelPage::draw(M5EPD_Canvas *canvas)
 {
+    // clear
+    canvas->createCanvas(PANEL_WIDTH, PANEL_HEIGHT);
+    canvas->clear();
+    canvas->pushCanvas(NAV_WIDTH, 0, UPDATE_MODE_GL16);
+    canvas->deleteCanvas();
+
     drawNavigation(canvas);
+
+    // draw elements
     for (size_t i = 0; i < numElements; i++)
     {
         int y = MARGIN + (i / ELEMENT_COLS) * ELEMENT_AREA_SIZE;
@@ -118,21 +126,25 @@ void M5PanelPage::drawNavigation(M5EPD_Canvas *canvas)
     (canvas->*back_triangle)(backArrowLeft, backArrowLeftY, backArrowRight, backArrowTop + 5, backArrowRight, backArrowBottom - 5, 15);
 
     canvas->pushCanvas(0, NAV_MARGIN_TOP_BOTTOM, UPDATE_MODE_DU);
+    canvas->deleteCanvas();
 }
 
 String M5PanelPage::processTouch(String currentElement, uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
 {
+    Serial.printf("Process touch on page %s (currentElement: %s)\n", identifier, currentElement);
     if (currentElement == identifier)
     {
         if (x <= NAV_WIDTH)
         {
+            Serial.println("Touched navigation area");
             // touch within navigation area
             if (NAV_MARGIN_TOP_BOTTOM > y || y > PANEL_HEIGHT - NAV_MARGIN_TOP_BOTTOM)
             {
                 return identifier; // not touched on arrows
             }
-            int arrow = ((y - NAV_MARGIN_TOP_BOTTOM) * 3) / (PANEL_HEIGHT - 2 * NAV_MARGIN_TOP_BOTTOM);
-            M5PanelPage *toDraw = NULL;
+            int arrow = (y - NAV_MARGIN_TOP_BOTTOM) / ((PANEL_HEIGHT - 2 * NAV_MARGIN_TOP_BOTTOM) / 3);
+            M5PanelPage *toDraw;
+            Serial.printf("Touched navigation button %d\n", arrow);
             switch (arrow)
             {
             case 0:
@@ -147,13 +159,15 @@ String M5PanelPage::processTouch(String currentElement, uint16_t x, uint16_t y, 
             default:
                 toDraw = NULL;
             }
-            Serial.println("Touched navigation button " + arrow);
+
             if (toDraw == NULL)
             {
+                Serial.printf("Nothing to draw\n");
                 return identifier;
             }
             else
             {
+                Serial.printf("Draw page %s\n", toDraw->identifier);
                 toDraw->draw(canvas);
                 return toDraw->identifier;
             }
@@ -163,11 +177,16 @@ String M5PanelPage::processTouch(String currentElement, uint16_t x, uint16_t y, 
             int elementIndexX = (x - NAV_WIDTH) / ELEMENT_AREA_SIZE;
             int elementIndexY = y / ELEMENT_AREA_SIZE;
             int elementIndex = (elementIndexX + 1) * (elementIndexY + 1) - 1;
+            Serial.println("Touched element " + elementIndex);
             int originX = elementIndexX * ELEMENT_AREA_SIZE + NAV_WIDTH;
             int originY = elementIndexY * ELEMENT_AREA_SIZE;
             if (elementIndex < numElements)
             {
-                return elements[elementIndex]->processTouch(x - originX, y - originY, canvas);
+                String newCurrentElement = elements[elementIndex]->processTouch(x - originX, y - originY, canvas);
+                if (newCurrentElement != "")
+                {
+                    return newCurrentElement;
+                }
             }
             return identifier;
         }
@@ -285,6 +304,7 @@ void M5PanelUIElement::draw(M5EPD_Canvas *canvas, int x, int y, int size)
     drawStatusAndControlArea(canvas, elementSize);
 
     canvas->pushCanvas(x + MARGIN, y + MARGIN, UPDATE_MODE_DU);
+    canvas->deleteCanvas();
 }
 
 void M5PanelUIElement::drawFrame(M5EPD_Canvas *canvas, int elementSize)
@@ -387,11 +407,14 @@ String M5PanelUIElement::forwardTouch(String currentElement, uint16_t x, uint16_
 String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
 {
     // TODO process touch on title / icon or control area for interaction
-    Serial.printf("Touched on item %s with coordinates (%d,%d) (relative to element frame)", identifier, x, y);
+    Serial.printf("Touched on item %s with coordinates (%d,%d) (relative to element frame)\n", identifier, x, y);
     // for now just assume we navigated
     if (detail != NULL)
     {
         detail->draw(canvas);
+        Serial.printf("Detail page identifier: %s\n", detail->identifier);
         return detail->identifier;
     }
+
+    return "";
 }

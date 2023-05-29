@@ -73,6 +73,11 @@ void debug(String function, String message)
 
 bool httpRequest(String &url, String &response)
 {
+    if (SAMPLE_SITEMAP)
+    {
+        return false;
+    }
+
     HTTPClient http;
     debug(F("httpRequest"), "HTTP request to " + String(url));
     if (WiFi.status() != WL_CONNECTED)
@@ -161,11 +166,17 @@ void parseWidgetLabel(String sitemapLabel, String &label, String &state)
 
 void updateSiteMap()
 {
-    // TODO dynamic sitemap tree structure
-
     debug(F("updateSiteMap"), "1:" + String(ESP.getFreeHeap()));
     String sitemapStr;
+
+#if SAMPLE_SITEMAP
+    debug(F("updateSiteMap"), "Load sample sitemap");
+    File f = LittleFS.open("/sample_sitemap.json");
+    sitemapStr = f.readString();
+#else
     httpRequest(restUrl + "/sitemaps/" + OPENHAB_SITEMAP, sitemapStr);
+#endif
+
     debug(F("updateSiteMap"), "2:" + String(ESP.getFreeHeap()));
     deserializeJson(jsonDoc, sitemapStr, DeserializationOption::NestingLimit(50));
     debug(F("updateSiteMap"), "3:" + String(ESP.getFreeHeap()));
@@ -174,6 +185,7 @@ void updateSiteMap()
 
     JsonObject rootPageJson = jsonDoc.as<JsonObject>()["homepage"];
     rootPage = new M5PanelPage(rootPageJson);
+    currentElement = rootPage->identifier;
     jsonDoc.clear();
     debug(F("updateSiteMap"), "5:" + String(ESP.getFreeHeap()));
 
@@ -344,59 +356,68 @@ void setup()
     Serial.print("Font load exit code:");
     Serial.println(errorCode);
 
-    canvas.setTextSize(FONT_SIZE_LABEL);
     canvas.createRender(FONT_SIZE_LABEL, FONT_CACHE_SIZE);
     canvas.createRender(FONT_SIZE_STATUS_CENTER, FONT_CACHE_SIZE);
     canvas.createRender(FONT_SIZE_STATUS_BOTTOM, FONT_CACHE_SIZE);
     canvas.createRender(FONT_SIZE_SYSINFO, FONT_CACHE_SIZE);
 
-    // Setup Wifi
-    Serial.println(F("Starting Wifi"));
-    WiFi.begin(WIFI_SSID, WIFI_PSK);
-    while (WiFi.status() != WL_CONNECTED)
-    {
-        delay(500);
-        Serial.print(".");
-    }
-    Serial.println();
-    Serial.println(F("WiFi connected"));
-    Serial.println(F("IP address: "));
-    Serial.println(WiFi.localIP());
+    canvas.setTextSize(FONT_SIZE_LABEL);
 
-    // NTP stuff
-    setInterval(3600);
-    waitForSync();
-    setTimeZone();
+    // Setup Wifi
+    if (!SAMPLE_SITEMAP)
+    {
+        Serial.println(F("Starting Wifi"));
+        WiFi.begin(WIFI_SSID, WIFI_PSK);
+        while (WiFi.status() != WL_CONNECTED)
+        {
+            delay(500);
+            Serial.print(".");
+        }
+        Serial.println();
+        Serial.println(F("WiFi connected"));
+        Serial.println(F("IP address: "));
+        Serial.println(WiFi.localIP());
+
+        // NTP stuff
+        setInterval(3600);
+        waitForSync();
+        setTimeZone();
+
+        subscribe();
+    }
 
     // displaySidebar();
-    subscribe();
     updateSiteMap();
 }
 
 // Loop
 void loop()
 {
-    // Subscribe or re-subscribe to sitemap
-    if (!SubscribeClient.connected())
+    if (!SAMPLE_SITEMAP)
     {
-        Serial.println(F("SubscribeClient not connected, connecting..."));
-        if (!subscribe())
-        {
-            delay(300);
-        }
-    }
 
-    // Check and get subscription data
-    while (SubscribeClient.available())
-    {
-        String SubscriptionReceivedData = SubscribeClient.readStringUntil('\n');
-        int dataStart = SubscriptionReceivedData.indexOf("data: ");
-        if (dataStart > -1) // received data contains "data: "
+        // Subscribe or re-subscribe to sitemap
+        if (!SubscribeClient.connected())
         {
-            String SubscriptionData = SubscriptionReceivedData.substring(dataStart + 6); // Remove chars before "data: "
-            int dataEnd = SubscriptionData.indexOf("\n\n");
-            SubscriptionData = SubscriptionData.substring(0, dataEnd);
-            parseSubscriptionData(SubscriptionData);
+            Serial.println(F("SubscribeClient not connected, connecting..."));
+            if (!subscribe())
+            {
+                delay(300);
+            }
+        }
+
+        // Check and get subscription data
+        while (SubscribeClient.available())
+        {
+            String SubscriptionReceivedData = SubscribeClient.readStringUntil('\n');
+            int dataStart = SubscriptionReceivedData.indexOf("data: ");
+            if (dataStart > -1) // received data contains "data: "
+            {
+                String SubscriptionData = SubscriptionReceivedData.substring(dataStart + 6); // Remove chars before "data: "
+                int dataEnd = SubscriptionData.indexOf("\n\n");
+                SubscriptionData = SubscriptionData.substring(0, dataEnd);
+                parseSubscriptionData(SubscriptionData);
+            }
         }
     }
 
@@ -409,10 +430,9 @@ void loop()
         {
             if (_last_pos_x != 0xFFFF && _last_pos_y != 0xFFFF)
             {
-
                 // process touch on finger lifting
-                rootPage->processTouch(currentElement, _last_pos_x, _last_pos_y, &canvas);
-
+                currentElement = rootPage->processTouch(currentElement, _last_pos_x, _last_pos_y, &canvas);
+                debug(F("loop"), "new current page after touch: " + currentElement);
                 _last_pos_x = _last_pos_y = 0xFFFF;
             }
         }
@@ -435,12 +455,12 @@ void loop()
     }
 
     // Full refresh every 10 minutes to clear artefacts
-    currentRefreshMillis = millis();
+    /*currentRefreshMillis = millis();
     if ((currentRefreshMillis - previousRefreshMillis) > 600000) // 600000
     {
         previousRefreshMillis = currentRefreshMillis;
         M5.EPD.UpdateFull(UPDATE_MODE_GL16);
         debug("Loop", "Full refresh");
-    }
+    }*/
     events(); // for ezTime
 }
