@@ -91,7 +91,7 @@ M5PanelPage::M5PanelPage(M5PanelUIElement *selection, JsonObject json, int pageI
     JsonArray choices = json["item"]["stateDescription"]["options"];
 
     identifier = selection->identifier + "_choices_" + pageIndex;
-    title = selection->title + "\n......";
+    title = selection->title;
     size_t pageOffset = pageIndex * MAX_ELEMENTS;
     numElements = min((size_t)MAX_ELEMENTS, choices.size() - pageOffset);
     // initialize choice elements
@@ -108,8 +108,6 @@ M5PanelPage::M5PanelPage(M5PanelUIElement *selection, JsonObject json, int pageI
 
     next = new M5PanelPage(selection, json, pageIndex + 1);
     next->previous = this;
-
-    parent = selection;
 }
 
 M5PanelPage::~M5PanelPage()
@@ -192,6 +190,12 @@ void M5PanelPage::drawNavigation(M5EPD_Canvas *canvas)
     canvas->deleteCanvas();
 }
 
+String navigate(M5PanelPage *navigationTarget, M5EPD_Canvas *canvas)
+{
+    navigationTarget->draw(canvas);
+    return navigationTarget->identifier;
+}
+
 String M5PanelPage::processNavigationTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
 {
     Serial.println("Touched navigation area");
@@ -225,8 +229,7 @@ String M5PanelPage::processNavigationTouch(uint16_t x, uint16_t y, M5EPD_Canvas 
     }
     else
     {
-        toDraw->draw(canvas);
-        return toDraw->identifier;
+        return navigate(toDraw, canvas);
     }
 }
 
@@ -289,6 +292,16 @@ String M5PanelPage::processTouch(String currentElement, uint16_t x, uint16_t y, 
 
 // M5PanelUIElement
 
+void setParentForPageAndSuccessors(M5PanelPage *firstChild, M5PanelUIElement *parent)
+{
+    M5PanelPage *page = firstChild;
+    while (page != NULL)
+    {
+        page->parent = parent;
+        page = page->next;
+    }
+}
+
 M5PanelUIElement::M5PanelUIElement(JsonObject json)
 {
     title = parseWidgetLabel(json["label"].as<String>()); // TODO if empty -> item label?
@@ -310,7 +323,7 @@ M5PanelUIElement::M5PanelUIElement(JsonObject json)
     {
         type = M5PanelElementType::Selection;
         choices = new M5PanelPage(this, json);
-        choices->parent = this;
+        setParentForPageAndSuccessors(choices, this);
     }
     else if (typeString == "Setpoint")
     {
@@ -345,12 +358,7 @@ M5PanelUIElement::M5PanelUIElement(JsonObject json)
     }
 
     detail = new M5PanelPage(widgets.size() != 0 ? json : linkedPageJson);
-    M5PanelPage *detailPage = detail;
-    while (detailPage != NULL)
-    {
-        detailPage->parent = this;
-        detailPage = detailPage->next;
-    }
+    setParentForPageAndSuccessors(detail, this);
 }
 
 M5PanelUIElement::M5PanelUIElement(M5PanelUIElement *selection, JsonObject json, int i)
@@ -360,7 +368,7 @@ M5PanelUIElement::M5PanelUIElement(M5PanelUIElement *selection, JsonObject json,
     String value = choices[i]["value"].as<String>();
     String label = choices[i]["label"].as<String>();
 
-    title = value + " (" + label + ")";
+    title = label;
     // TODO icon?
     identifier = selection->identifier + "_choice_" + i;
     type = M5PanelElementType::Choice;
@@ -502,24 +510,27 @@ String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canv
     // TODO process touch on title / icon or control area for interaction
     Serial.printf("Touched on item %s with coordinates (%d,%d) (relative to element frame)\n", identifier.c_str(), x, y);
     // for now just assume we navigated
-    if (y < ELEMENT_AREA_SIZE - ELEMENT_CONTROL_HEIGHT - MARGIN || type == M5PanelElementType::Frame)
+    if (y < ELEMENT_AREA_SIZE - ELEMENT_CONTROL_HEIGHT - MARGIN || type == M5PanelElementType::Frame || type == M5PanelElementType::Choice)
     {
         if (detail != NULL)
         {
-            {
-                detail->draw(canvas);
-                return detail->identifier;
-            }
+            return navigate(detail, canvas);
+        }
+
+        if (type == M5PanelElementType::Choice)
+        {
+            // TODO send control action to OpenHab
+            // navigate back to parent page (parent of parent element of parent page)
+            return navigate(parent->parent->parent, canvas);
         }
     }
     else
     {
-        Serial.printf("Touched control area\n");
+        Serial.printf("Touched control area of element with type %d\n", type);
         switch (type)
         {
         case M5PanelElementType::Selection:
-            choices->draw(canvas);
-            return choices->identifier;
+            return navigate(choices, canvas);
         default:
             break;
         }
