@@ -151,7 +151,6 @@ void M5PanelPage::drawNavigation(M5EPD_Canvas *canvas)
     canvas->setTextWrap(true);
     canvas->setTextColor(15);
     canvas->println(title);
-    Serial.printf("Title drawn: %s\n", title);
     canvas->pushCanvas(MARGIN, MARGIN, UPDATE_MODE_GLR16);
     canvas->deleteCanvas();
 
@@ -205,7 +204,6 @@ String M5PanelPage::processNavigationTouch(uint16_t x, uint16_t y, M5EPD_Canvas 
     }
     int arrow = y / (arrowAreaHeight / 3);
     M5PanelPage *toDraw;
-    Serial.printf("Touched navigation button %d\n", arrow);
     switch (arrow)
     {
     case 0:
@@ -223,12 +221,10 @@ String M5PanelPage::processNavigationTouch(uint16_t x, uint16_t y, M5EPD_Canvas 
 
     if (toDraw == NULL)
     {
-        Serial.printf("Nothing to draw\n");
         return identifier;
     }
     else
     {
-        Serial.printf("Draw page %s\n", toDraw->identifier);
         toDraw->draw(canvas);
         return toDraw->identifier;
     }
@@ -255,7 +251,6 @@ String M5PanelPage::processElementTouch(uint16_t x, uint16_t y, M5EPD_Canvas *ca
 
 String M5PanelPage::processTouch(String currentElement, uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
 {
-    Serial.printf("Process touch on page %s (currentElement: %s)\n", identifier, currentElement);
     if (currentElement == identifier)
     {
         if (x <= NAV_WIDTH)
@@ -315,6 +310,7 @@ M5PanelUIElement::M5PanelUIElement(JsonObject json)
     {
         type = M5PanelElementType::Selection;
         choices = new M5PanelPage(this, json);
+        choices->parent = this;
     }
     else if (typeString == "Setpoint")
     {
@@ -364,7 +360,7 @@ M5PanelUIElement::M5PanelUIElement(M5PanelUIElement *selection, JsonObject json,
     String value = choices[i]["value"].as<String>();
     String label = choices[i]["label"].as<String>();
 
-    title = value + "\n(" + label + ")";
+    title = value + " (" + label + ")";
     // TODO icon?
     identifier = selection->identifier + "_choice_" + i;
     type = M5PanelElementType::Choice;
@@ -504,13 +500,28 @@ String M5PanelUIElement::forwardTouch(String currentElement, uint16_t x, uint16_
 String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
 {
     // TODO process touch on title / icon or control area for interaction
-    Serial.printf("Touched on item %s with coordinates (%d,%d) (relative to element frame)\n", identifier, x, y);
+    Serial.printf("Touched on item %s with coordinates (%d,%d) (relative to element frame)\n", identifier.c_str(), x, y);
     // for now just assume we navigated
-    if (detail != NULL)
+    if (y < ELEMENT_CONTROL_HEIGHT || type == M5PanelElementType::Frame)
     {
-        detail->draw(canvas);
-        Serial.printf("Detail page identifier: %s\n", detail->identifier);
-        return detail->identifier;
+        if (detail != NULL)
+        {
+            {
+                detail->draw(canvas);
+                return detail->identifier;
+            }
+        }
+    }
+    else
+    {
+        switch (type)
+        {
+        case M5PanelElementType::Selection:
+            choices->draw(canvas);
+            return choices->identifier;
+        default:
+            break;
+        }
     }
 
     return "";
