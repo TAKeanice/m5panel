@@ -236,12 +236,12 @@ String M5PanelPage::processNavigationTouch(uint16_t x, uint16_t y, M5EPD_Canvas 
 
 String M5PanelPage::processElementTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
 {
-    int elementIndexX = x / ELEMENT_AREA_SIZE;
-    int elementIndexY = y / ELEMENT_AREA_SIZE;
-    int elementIndex = (elementIndexX + 1) * (elementIndexY + 1) - 1;
-    Serial.println("Touched element " + elementIndex);
-    int originX = elementIndexX * ELEMENT_AREA_SIZE;
-    int originY = elementIndexY * ELEMENT_AREA_SIZE;
+    int elementColumn = x / ELEMENT_AREA_SIZE;
+    int elementRow = y / ELEMENT_AREA_SIZE;
+    int elementIndex = (elementColumn * ELEMENT_COLS) + (elementRow);
+    Serial.printf("Touched element %d", elementIndex);
+    int originX = elementColumn * ELEMENT_AREA_SIZE;
+    int originY = elementRow * ELEMENT_AREA_SIZE;
     if (elementIndex < numElements)
     {
         String newCurrentElement = elements[elementIndex]->processTouch(x - originX, y - originY, canvas);
