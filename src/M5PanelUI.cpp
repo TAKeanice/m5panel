@@ -99,7 +99,7 @@ void M5PanelPage::draw(M5EPD_Canvas *canvas)
     // clear
     canvas->createCanvas(PANEL_WIDTH, PANEL_HEIGHT);
     canvas->clear();
-    canvas->pushCanvas(NAV_WIDTH, 0, UPDATE_MODE_GL16);
+    canvas->pushCanvas(NAV_WIDTH, 0, UPDATE_MODE_DU);
     canvas->deleteCanvas();
 
     drawNavigation(canvas);
@@ -351,6 +351,14 @@ void M5PanelUIElement::drawFrame(M5EPD_Canvas *canvas, int elementSize)
     int innerRadius = radius - LINE_THICKNESS;
     canvas->fillRoundRect(0, 0, elementSize, elementSize, radius, 15);
     canvas->fillRoundRect(innerRectStart, innerRectStart, innerRectSize, innerRectSize, innerRadius, 0);
+
+    // detail page indicator
+    if (detail != NULL)
+    {
+        int cornerStart = innerRectStart + innerRectSize - 30;
+        canvas->fillRoundRect(cornerStart, innerRectStart, 30, 30, innerRadius, 15);
+        canvas->fillTriangle(cornerStart, innerRectStart, cornerStart + 30, innerRectStart + 30, cornerStart, innerRectStart + 30, 0);
+    }
 }
 
 void M5PanelUIElement::drawTitle(M5EPD_Canvas *canvas, int elementSize)
