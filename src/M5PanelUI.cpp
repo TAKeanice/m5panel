@@ -234,8 +234,8 @@ String M5PanelPage::processElementTouch(uint16_t x, uint16_t y, M5EPD_Canvas *ca
 {
     int elementColumn = x / ELEMENT_AREA_SIZE;
     int elementRow = y / ELEMENT_AREA_SIZE;
-    int elementIndex = (elementColumn * ELEMENT_COLS) + (elementRow);
-    Serial.printf("Touched element %d", elementIndex);
+    int elementIndex = elementColumn + (elementRow * ELEMENT_COLS);
+    Serial.printf("Touched element %d\n", elementIndex);
     int originX = elementColumn * ELEMENT_AREA_SIZE;
     int originY = elementRow * ELEMENT_AREA_SIZE;
     if (elementIndex < numElements)
@@ -502,7 +502,7 @@ String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canv
     // TODO process touch on title / icon or control area for interaction
     Serial.printf("Touched on item %s with coordinates (%d,%d) (relative to element frame)\n", identifier.c_str(), x, y);
     // for now just assume we navigated
-    if (y < ELEMENT_CONTROL_HEIGHT || type == M5PanelElementType::Frame)
+    if (y < ELEMENT_AREA_SIZE - ELEMENT_CONTROL_HEIGHT - MARGIN || type == M5PanelElementType::Frame)
     {
         if (detail != NULL)
         {
@@ -514,6 +514,7 @@ String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canv
     }
     else
     {
+        Serial.printf("Touched control area\n");
         switch (type)
         {
         case M5PanelElementType::Selection:
