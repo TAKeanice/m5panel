@@ -3,10 +3,11 @@
 
 // Constants
 
-#define MAX_ELEMENTS 6
-
 #define ELEMENT_ROWS 2
 #define ELEMENT_COLS 3
+
+// ELEMENT_ROWS * ELEMENT_COLS
+#define MAX_ELEMENTS 6
 
 #define PANEL_WIDTH 960
 #define PANEL_HEIGHT 540
@@ -57,11 +58,11 @@ M5PanelPage::M5PanelPage(JsonObject json, int pageIndex)
     String label = json["label"].isNull() ? "" : json["label"].as<String>();
     String titleString = json["title"].isNull() ? "" : json["title"].as<String>();
     title = parseWidgetLabel(label + titleString);
-    JsonArray widgets = json["widgets"];
-    size_t pageOffset = pageIndex * 6;
 
     Serial.println("Initialized page: " + title + " (number " + (pageIndex + 1) + ")");
 
+    size_t pageOffset = pageIndex * MAX_ELEMENTS;
+    JsonArray widgets = json["widgets"];
     numElements = min((size_t)MAX_ELEMENTS, widgets.size() - pageOffset);
 
     // initialize elements on page
@@ -81,6 +82,34 @@ M5PanelPage::M5PanelPage(JsonObject json, int pageIndex)
 
     next = new M5PanelPage(json, pageIndex + 1);
     next->previous = this;
+}
+
+M5PanelPage::M5PanelPage(M5PanelUIElement *selection, JsonObject json) : M5PanelPage(selection, json, 0) {}
+
+M5PanelPage::M5PanelPage(M5PanelUIElement *selection, JsonObject json, int pageIndex)
+{
+    JsonArray choices = json["item"]["stateDescription"]["options"];
+
+    identifier = selection->identifier + "_choices_" + pageIndex;
+    title = selection->title + "\n......";
+    size_t pageOffset = pageIndex * MAX_ELEMENTS;
+    numElements = min((size_t)MAX_ELEMENTS, choices.size() - pageOffset);
+    // initialize choice elements
+    for (size_t i = 0; i < numElements; i++)
+    {
+        elements[i] = new M5PanelUIElement(selection, json, pageOffset + i);
+        elements[i]->parent = this;
+    }
+    if (choices.size() - pageOffset <= MAX_ELEMENTS)
+    {
+        // no additional pages needed
+        return;
+    }
+
+    next = new M5PanelPage(selection, json, pageIndex + 1);
+    next->previous = this;
+
+    parent = selection;
 }
 
 M5PanelPage::~M5PanelPage()
@@ -285,7 +314,7 @@ M5PanelUIElement::M5PanelUIElement(JsonObject json)
     else if (typeString == "Selection")
     {
         type = M5PanelElementType::Selection;
-        // TODO create "choices" page
+        choices = new M5PanelPage(this, json);
     }
     else if (typeString == "Setpoint")
     {
@@ -326,6 +355,19 @@ M5PanelUIElement::M5PanelUIElement(JsonObject json)
         detailPage->parent = this;
         detailPage = detailPage->next;
     }
+}
+
+M5PanelUIElement::M5PanelUIElement(M5PanelUIElement *selection, JsonObject json, int i)
+{
+    JsonArray choices = json["item"]["stateDescription"]["options"];
+
+    String value = choices[i]["value"].as<String>();
+    String label = choices[i]["label"].as<String>();
+
+    title = value + "\n(" + label + ")";
+    // TODO icon?
+    identifier = selection->identifier + "_choice_" + i;
+    type = M5PanelElementType::Choice;
 }
 
 M5PanelUIElement::~M5PanelUIElement()

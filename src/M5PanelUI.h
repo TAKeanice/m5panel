@@ -26,7 +26,10 @@ class M5PanelPage
 {
 private:
     size_t numElements;
+
     M5PanelPage(JsonObject json, int pageIndex);
+    M5PanelPage(M5PanelUIElement *selection, JsonObject json, int pageIndex);
+
     void drawNavigation(M5EPD_Canvas *canvas);
     String processNavigationTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
     String processElementTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
@@ -41,6 +44,7 @@ public:
     String identifier = "";
 
     M5PanelPage(JsonObject json);
+    M5PanelPage(M5PanelUIElement *selection, JsonObject json);
     ~M5PanelPage();
 
     void draw(M5EPD_Canvas *canvas);
@@ -71,6 +75,7 @@ public:
     String identifier = "";
 
     M5PanelUIElement(JsonObject json);
+    M5PanelUIElement(M5PanelUIElement *selection, JsonObject json, int i);
     ~M5PanelUIElement();
 
     void draw(M5EPD_Canvas *canvas, int x, int y, int size);
