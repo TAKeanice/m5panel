@@ -164,6 +164,66 @@ void M5PanelPage::drawNavigation(M5EPD_Canvas *canvas)
     canvas->deleteCanvas();
 }
 
+String M5PanelPage::processNavigationTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
+{
+    Serial.println("Touched navigation area");
+    // touch within navigation area
+    int arrowAreaHeight = PANEL_HEIGHT - 2 * NAV_MARGIN_TOP_BOTTOM;
+
+    if (y > arrowAreaHeight)
+    {
+        return identifier; // not touched on arrows
+    }
+    int arrow = y / (arrowAreaHeight / 3);
+    M5PanelPage *toDraw;
+    Serial.printf("Touched navigation button %d\n", arrow);
+    switch (arrow)
+    {
+    case 0:
+        toDraw = next;
+        break;
+    case 1:
+        toDraw = previous;
+        break;
+    case 2:
+        toDraw = parent == NULL ? NULL : parent->parent;
+        break;
+    default:
+        toDraw = NULL;
+    }
+
+    if (toDraw == NULL)
+    {
+        Serial.printf("Nothing to draw\n");
+        return identifier;
+    }
+    else
+    {
+        Serial.printf("Draw page %s\n", toDraw->identifier);
+        toDraw->draw(canvas);
+        return toDraw->identifier;
+    }
+}
+
+String M5PanelPage::processElementTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
+{
+    int elementIndexX = x / ELEMENT_AREA_SIZE;
+    int elementIndexY = y / ELEMENT_AREA_SIZE;
+    int elementIndex = (elementIndexX + 1) * (elementIndexY + 1) - 1;
+    Serial.println("Touched element " + elementIndex);
+    int originX = elementIndexX * ELEMENT_AREA_SIZE;
+    int originY = elementIndexY * ELEMENT_AREA_SIZE;
+    if (elementIndex < numElements)
+    {
+        String newCurrentElement = elements[elementIndex]->processTouch(x - originX, y - originY, canvas);
+        if (newCurrentElement != "")
+        {
+            return newCurrentElement;
+        }
+    }
+    return identifier;
+}
+
 String M5PanelPage::processTouch(String currentElement, uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
 {
     Serial.printf("Process touch on page %s (currentElement: %s)\n", identifier, currentElement);
@@ -171,59 +231,11 @@ String M5PanelPage::processTouch(String currentElement, uint16_t x, uint16_t y, 
     {
         if (x <= NAV_WIDTH)
         {
-            Serial.println("Touched navigation area");
-            // touch within navigation area
-            if (NAV_MARGIN_TOP_BOTTOM > y || y > PANEL_HEIGHT - NAV_MARGIN_TOP_BOTTOM)
-            {
-                return identifier; // not touched on arrows
-            }
-            int arrow = (y - NAV_MARGIN_TOP_BOTTOM) / ((PANEL_HEIGHT - 2 * NAV_MARGIN_TOP_BOTTOM) / 3);
-            M5PanelPage *toDraw;
-            Serial.printf("Touched navigation button %d\n", arrow);
-            switch (arrow)
-            {
-            case 0:
-                toDraw = next;
-                break;
-            case 1:
-                toDraw = previous;
-                break;
-            case 2:
-                toDraw = parent == NULL ? NULL : parent->parent;
-                break;
-            default:
-                toDraw = NULL;
-            }
-
-            if (toDraw == NULL)
-            {
-                Serial.printf("Nothing to draw\n");
-                return identifier;
-            }
-            else
-            {
-                Serial.printf("Draw page %s\n", toDraw->identifier);
-                toDraw->draw(canvas);
-                return toDraw->identifier;
-            }
+            return processNavigationTouch(x, y - NAV_MARGIN_TOP_BOTTOM, canvas);
         }
         else
         {
-            int elementIndexX = (x - NAV_WIDTH) / ELEMENT_AREA_SIZE;
-            int elementIndexY = y / ELEMENT_AREA_SIZE;
-            int elementIndex = (elementIndexX + 1) * (elementIndexY + 1) - 1;
-            Serial.println("Touched element " + elementIndex);
-            int originX = elementIndexX * ELEMENT_AREA_SIZE + NAV_WIDTH;
-            int originY = elementIndexY * ELEMENT_AREA_SIZE;
-            if (elementIndex < numElements)
-            {
-                String newCurrentElement = elements[elementIndex]->processTouch(x - originX, y - originY, canvas);
-                if (newCurrentElement != "")
-                {
-                    return newCurrentElement;
-                }
-            }
-            return identifier;
+            return processElementTouch(x - NAV_WIDTH, y, canvas);
         }
     }
     else

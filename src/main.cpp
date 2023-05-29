@@ -145,25 +145,6 @@ bool subscribe()
     return true;
 }
 
-void parseWidgetLabel(String sitemapLabel, String &label, String &state)
-{
-    int firstOpeningBracket = sitemapLabel.indexOf('[');
-    int firstClosingBracket = sitemapLabel.indexOf(']');
-    if ((firstOpeningBracket == -1) || (firstClosingBracket == -1)) // Value not found
-    {
-        sitemapLabel.trim();
-        label = sitemapLabel;
-        state = "";
-    }
-    else
-    {
-        label = sitemapLabel.substring(0, firstOpeningBracket);
-        label.trim();
-        state = sitemapLabel.substring(firstOpeningBracket + 1, firstClosingBracket);
-        state.trim();
-    }
-}
-
 void updateSiteMap()
 {
     debug(F("updateSiteMap"), "1:" + String(ESP.getFreeHeap()));
