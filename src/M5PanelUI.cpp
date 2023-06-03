@@ -238,15 +238,21 @@ String M5PanelPage::processElementTouch(uint16_t x, uint16_t y, M5EPD_Canvas *ca
     int elementColumn = x / ELEMENT_AREA_SIZE;
     int elementRow = y / ELEMENT_AREA_SIZE;
     int elementIndex = elementColumn + (elementRow * ELEMENT_COLS);
-    Serial.printf("Touched element %d\n", elementIndex);
     int originX = elementColumn * ELEMENT_AREA_SIZE;
     int originY = elementRow * ELEMENT_AREA_SIZE;
     if (elementIndex < numElements)
     {
-        String newCurrentElement = elements[elementIndex]->processTouch(x - originX, y - originY, canvas);
+        int highlightX, highlightY;
+        String newCurrentElement = elements[elementIndex]->processTouch(x - originX, y - originY, canvas, &highlightX, &highlightY);
         if (newCurrentElement != "")
         {
             return newCurrentElement;
+        }
+        else
+        {
+            // react to touch graphically to give immediate feedback, since no navigation occurred
+            canvas->pushCanvas(highlightX + originX + NAV_WIDTH + MARGIN, highlightY + originY + MARGIN, UPDATE_MODE_GC16);
+            canvas->deleteCanvas();
         }
     }
     return identifier;
@@ -262,7 +268,7 @@ String M5PanelPage::processTouch(String currentElement, uint16_t x, uint16_t y, 
         }
         else
         {
-            return processElementTouch(x - NAV_WIDTH, y, canvas);
+            return processElementTouch(x - NAV_WIDTH - MARGIN, y - MARGIN, canvas);
         }
     }
     else
@@ -505,13 +511,13 @@ String M5PanelUIElement::forwardTouch(String currentElement, uint16_t x, uint16_
     return "";
 }
 
-String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
+String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas, int *highlightX, int *highlightY)
 {
     // TODO process touch on title / icon or control area for interaction
-    Serial.printf("Touched on item %s with coordinates (%d,%d) (relative to element frame)\n", identifier.c_str(), x, y);
-    // for now just assume we navigated
-    if (y < ELEMENT_AREA_SIZE - ELEMENT_CONTROL_HEIGHT - MARGIN || type == M5PanelElementType::Frame || type == M5PanelElementType::Choice)
+    Serial.printf("Touched on item %s (title: %s) with coordinates (%d,%d) (relative to element frame)\n", identifier.c_str(), title.c_str(), x, y);
+    if (y < ELEMENT_AREA_SIZE - ELEMENT_CONTROL_HEIGHT - MARGIN || type == M5PanelElementType::Frame || type == M5PanelElementType::Choice || type == M5PanelElementType::Text)
     {
+        // touched in area for navigation
         if (detail != NULL)
         {
             return navigate(detail, canvas);
@@ -526,11 +532,39 @@ String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canv
     }
     else
     {
-        Serial.printf("Touched control area of element with type %d\n", type);
+        int elementSize = ELEMENT_AREA_SIZE - 2 * MARGIN;
+        // touched in area for state / control
+        // TODO send command
         switch (type)
         {
         case M5PanelElementType::Selection:
             return navigate(choices, canvas);
+        case M5PanelElementType::Setpoint:
+        case M5PanelElementType::Slider:
+            canvas->createCanvas(elementSize / 2, ELEMENT_CONTROL_HEIGHT);
+            *highlightY = elementSize - ELEMENT_CONTROL_HEIGHT + MARGIN;
+            canvas->fillRect(0, 0, elementSize / 2, ELEMENT_CONTROL_HEIGHT, 8);
+            if (x < ELEMENT_AREA_SIZE / 2)
+            {
+                Serial.printf("Touched -");
+                // touched -
+                *highlightX = MARGIN;
+            }
+            else
+            {
+                Serial.printf("Touched +");
+                // touched +
+                *highlightX = elementSize / 2 + MARGIN;
+            }
+            return "";
+        case M5PanelElementType::Switch:
+            Serial.printf("Touched on switch");
+            // touched switch
+            canvas->createCanvas(elementSize, ELEMENT_CONTROL_HEIGHT);
+            *highlightY = elementSize - ELEMENT_CONTROL_HEIGHT + MARGIN;
+            *highlightX = MARGIN;
+            canvas->fillRect(0, 0, elementSize, ELEMENT_CONTROL_HEIGHT, 8);
+            return "";
         default:
             break;
         }
