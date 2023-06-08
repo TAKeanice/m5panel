@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <ArduinoJson.h>
 #include <M5EPD.h>
+#include <map>
 
 #define FONT_SIZE_LABEL 32
 #define FONT_SIZE_STATUS_CENTER 48
@@ -30,6 +31,7 @@ private:
     M5PanelPage(JsonObject json, int pageIndex);
     M5PanelPage(M5PanelUIElement *selection, JsonObject json, int pageIndex);
 
+    void drawElement(M5EPD_Canvas *canvas, int elementIndex);
     void drawNavigation(M5EPD_Canvas *canvas);
     String processNavigationTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
     String processElementTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
@@ -44,6 +46,7 @@ public:
     String identifier = "";
 
     M5PanelPage(JsonObject json);
+    /** create choices page */
     M5PanelPage(M5PanelUIElement *selection, JsonObject json);
     ~M5PanelPage();
 
@@ -53,11 +56,18 @@ public:
      * react to touch in a certain place and return the new currentElement
      */
     String processTouch(String currentElement, uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
+
+    /**
+     * update widget and report the page where this was found
+     */
+    String updateWidget(JsonObject json, String widgetId, String currentPage, M5EPD_Canvas *canvas);
 };
 
 class M5PanelUIElement
 {
 private:
+    JsonObject json;
+
     void drawFrame(M5EPD_Canvas *canvas, int size);
     void drawTitle(M5EPD_Canvas *canvas, int size);
     void drawIcon(M5EPD_Canvas *canvas, int size);
@@ -65,9 +75,9 @@ private:
 
 public:
     M5PanelElementType type;
-    String title; // TODO replace with fixed-length char[]
-    String icon;  // TODO replace with fixed-length char[]
-    String state; // TODO replace with fixed-length char[]
+    String title;
+    String icon;
+    String state;
     M5PanelPage *parent = NULL;
     M5PanelPage *detail = NULL;
     M5PanelPage *choices = NULL;
@@ -75,7 +85,10 @@ public:
     String identifier = "";
 
     M5PanelUIElement(JsonObject json);
+    /** create choice element */
     M5PanelUIElement(M5PanelUIElement *selection, JsonObject json, int i);
+    /** replace oldElement with new element, old element gets deleted */
+    M5PanelUIElement(JsonObject json, M5PanelUIElement *oldElement);
     ~M5PanelUIElement();
 
     void draw(M5EPD_Canvas *canvas, int x, int y, int size);

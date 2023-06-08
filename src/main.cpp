@@ -33,7 +33,7 @@ unsigned long upTime;
 DynamicJsonDocument jsonDoc(60000); // size to be checked
 
 M5PanelPage *rootPage = NULL;
-String currentElement = ""; // TODO store the current widget ID in here
+String currentPage = ""; // TODO store the current widget ID in here
 
 int previousSysInfoMillis = 0;
 int currentSysInfoMillis;
@@ -128,11 +128,12 @@ bool subscribe()
     subscribeResponse = httpClient.getString();
     httpClient.end();
 
+    DynamicJsonDocument subscribeResponseJson(3000);
     // Serial.println("HTTP SUBSCRIBE: " + subscribeResponse);
-    deserializeJson(jsonDoc, subscribeResponse);
+    deserializeJson(subscribeResponseJson, subscribeResponse);
 
-    // String subscriptionURL = jsonDoc["Location"].as<String>();
-    String subscriptionURL = jsonDoc["context"]["headers"]["Location"][0];
+    // String subscriptionURL = subscribeResponseJson["Location"].as<String>();
+    String subscriptionURL = subscribeResponseJson["context"]["headers"]["Location"][0];
     debug(F("subscribe"), "Full subscriptionURL: " + subscriptionURL);
     subscriptionURL = subscriptionURL.substring(subscriptionURL.indexOf("/rest/sitemaps")) + "?sitemap=" + OPENHAB_SITEMAP + "&pageid=" + OPENHAB_SITEMAP; // Fix : pageId
     debug(F("subscribe"), "subscriptionURL: " + subscriptionURL);
@@ -147,6 +148,7 @@ bool subscribe()
 
 void updateSiteMap()
 {
+    jsonDoc.clear(); // jsonDoc needed to stay because elements refer to it
     debug(F("updateSiteMap"), "1:" + String(ESP.getFreeHeap()));
     String sitemapStr;
 
@@ -166,8 +168,7 @@ void updateSiteMap()
 
     JsonObject rootPageJson = jsonDoc.as<JsonObject>()["homepage"];
     rootPage = new M5PanelPage(rootPageJson);
-    currentElement = rootPage->identifier;
-    jsonDoc.clear();
+    currentPage = rootPage->identifier;
     debug(F("updateSiteMap"), "5:" + String(ESP.getFreeHeap()));
 
     rootPage->draw(&canvas);
@@ -177,12 +178,13 @@ void parseSubscriptionData(String jsonDataStr)
 {
     DynamicJsonDocument jsonData(30000);
     deserializeJson(jsonData, jsonDataStr);
+    debug(F("parseSubscriptionData"), jsonDataStr);
     if (!jsonData["widgetId"].isNull()) // Data Widget (subscription)
     {
         String widgetId = jsonData["widgetId"];
-        debug(F("parseSubscriptionData"), "Widget changed" + widgetId);
-
-        // TODO update all widgets and redraw if widget on currently shown page
+        debug(F("parseSubscriptionData"), "Widget changed: " + widgetId);
+        // update widget and redraw if widget on currently shown page
+        rootPage->updateWidget(jsonData.as<JsonObject>(), widgetId, currentPage, &canvas);
     }
     else if (!jsonData["TYPE"].isNull())
     {
@@ -412,8 +414,8 @@ void loop()
             if (_last_pos_x != 0xFFFF && _last_pos_y != 0xFFFF)
             {
                 // process touch on finger lifting
-                currentElement = rootPage->processTouch(currentElement, _last_pos_x, _last_pos_y, &canvas);
-                debug(F("loop"), "new current page after touch: " + currentElement);
+                currentPage = rootPage->processTouch(currentPage, _last_pos_x, _last_pos_y, &canvas);
+                debug(F("loop"), "new current page after touch: " + currentPage);
                 _last_pos_x = _last_pos_y = 0xFFFF;
             }
         }

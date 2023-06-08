@@ -27,21 +27,21 @@
 
 // Utility functions
 
-String parseWidgetLabel(String sitemapLabel)
+String parseWidgetLabel(String label)
 {
-    int openingBracket = sitemapLabel.lastIndexOf('[');
-    int closingBracket = sitemapLabel.lastIndexOf(']');
-    String label;
+    int openingBracket = label.lastIndexOf('[');
+    int closingBracket = label.lastIndexOf(']');
+    String parsedLabel;
     if (openingBracket == -1 || closingBracket == -1) // Value not found
     {
-        label = sitemapLabel;
+        parsedLabel = label;
     }
     else
     {
-        label = sitemapLabel.substring(0, openingBracket);
+        parsedLabel = label.substring(0, openingBracket);
     }
-    label.trim();
-    return label;
+    parsedLabel.trim();
+    return parsedLabel;
 }
 
 // M5PanelPage
@@ -134,10 +134,15 @@ void M5PanelPage::draw(M5EPD_Canvas *canvas)
     // draw elements
     for (size_t i = 0; i < numElements; i++)
     {
-        int y = MARGIN + (i / ELEMENT_COLS) * ELEMENT_AREA_SIZE;
-        int x = NAV_WIDTH + MARGIN + (i % ELEMENT_COLS) * ELEMENT_AREA_SIZE;
-        elements[i]->draw(canvas, x, y, ELEMENT_AREA_SIZE);
+        drawElement(canvas, i);
     }
+}
+
+void M5PanelPage::drawElement(M5EPD_Canvas *canvas, int elementIndex)
+{
+    int y = MARGIN + (elementIndex / ELEMENT_COLS) * ELEMENT_AREA_SIZE;
+    int x = NAV_WIDTH + MARGIN + (elementIndex % ELEMENT_COLS) * ELEMENT_AREA_SIZE;
+    elements[elementIndex]->draw(canvas, x, y, ELEMENT_AREA_SIZE);
 }
 
 void M5PanelPage::drawNavigation(M5EPD_Canvas *canvas)
@@ -296,6 +301,56 @@ String M5PanelPage::processTouch(String currentElement, uint16_t x, uint16_t y, 
     }
 }
 
+String M5PanelPage::updateWidget(JsonObject json, String widgetId, String currentPage, M5EPD_Canvas *canvas)
+{
+    Serial.printf("Updating on page %s\n", identifier.c_str());
+    for (size_t i = 0; i < numElements; i++)
+    {
+        M5PanelUIElement *element = elements[i];
+        if (element->identifier != widgetId)
+        {
+            continue;
+        }
+        Serial.printf("found widget %s\n", widgetId.c_str());
+        // replace widget
+        elements[i] = new M5PanelUIElement(json, element);
+        if (currentPage == identifier)
+        {
+            Serial.printf("redraw element %s\n", element->identifier.c_str());
+            // redraw widget
+            drawElement(canvas, i);
+        }
+        // widget to update was found on this page
+        return identifier;
+    }
+
+    // search subpages for element to be updated
+    for (size_t i = 0; i < numElements; i++)
+    {
+        M5PanelUIElement *element = elements[i];
+        // forward update command
+        if (element->detail != NULL)
+        {
+            Serial.printf("Updating element %s detail\n", element->identifier.c_str());
+            String foundOnPageId = element->detail->updateWidget(json, widgetId, currentPage, canvas);
+            if (foundOnPageId != "")
+            {
+                return foundOnPageId;
+            }
+        }
+    }
+
+    // not found on any of the subpages, search sibling page
+    if (next != NULL)
+    {
+        Serial.printf("Updating next page %s\n", next->identifier.c_str());
+        return next->updateWidget(json, widgetId, currentPage, canvas);
+    }
+
+    // not found at all in this branch
+    return "";
+}
+
 // M5PanelUIElement
 
 void setParentForPageAndSuccessors(M5PanelPage *firstChild, M5PanelUIElement *parent)
@@ -308,17 +363,73 @@ void setParentForPageAndSuccessors(M5PanelPage *firstChild, M5PanelUIElement *pa
     }
 }
 
-M5PanelUIElement::M5PanelUIElement(JsonObject json)
+String getStateString(JsonObject json)
 {
+    // get state from label
+    String label = json["label"];
+    int openingBracket = label.lastIndexOf('[');
+    int closingBracket = label.lastIndexOf(']');
+    if (openingBracket != -1 && closingBracket != -1) // Value not found
+    {
+        String value = label.substring(openingBracket + 1, closingBracket);
+        value.trim();
+        return value;
+    }
+
+    // get state from item
+    JsonObject item = json["item"];
+    if (json["state"].isNull() && item["state"].isNull())
+    {
+        return "";
+    }
+    String stateString = json["state"].isNull() ? item["state"].as<String>() : json["state"].as<String>();
+    JsonObject stateDescription = item["stateDescription"];
+    JsonArray mappings = json["mappings"];
+    JsonArray options = mappings.isNull() || mappings.size() == 0 ? stateDescription["options"] : mappings;
+    if (!options.isNull())
+    {
+        for (size_t i = 0; i < options.size(); i++)
+        {
+            JsonObject option = options[i];
+            String optionName = option["value"].isNull() ? option["command"].as<String>() : option["value"].as<String>();
+            if (optionName == stateString)
+            {
+                // replace state value with label
+                stateString = option["label"].as<String>();
+                break;
+            }
+        }
+    }
+
+    return stateString;
+}
+
+M5PanelUIElement::M5PanelUIElement(JsonObject newJson, M5PanelUIElement *oldElement)
+{
+    json = oldElement != NULL ? oldElement->json : newJson;
+    if (oldElement != NULL)
+    {
+        // update contents of old json (the elements to update are derived from the BasicUI update function)
+        String state = newJson["state"].isNull() ? newJson["item"]["state"].as<String>() : newJson["state"].as<String>();
+        if (!json["state"].isNull())
+        {
+            json["state"].set(state);
+        }
+        json["item"]["state"].set(state);
+
+        json["label"].set(newJson["label"]);
+
+        json["visibility"].set(newJson["visibility"]);
+    }
+
     title = parseWidgetLabel(json["label"].as<String>()); // TODO if empty -> item label?
     icon = json["icon"].as<String>();
 
-    // TODO store item with stateDescription, commandDescription
-
     identifier = json["widgetId"].as<String>();
 
-    String stateString = json["item"]["state"];
-    state = stateString == "NULL" ? "" : stateString; // TODO use mappings and format from sitemap
+    // TODO store commandDescription, mappings, pattern
+
+    state = getStateString(json);
 
     String typeString = json["type"];
     if (typeString == "Frame")
@@ -365,7 +476,20 @@ M5PanelUIElement::M5PanelUIElement(JsonObject json)
 
     detail = new M5PanelPage(widgets.size() != 0 ? json : linkedPageJson);
     setParentForPageAndSuccessors(detail, this);
+
+    if (oldElement != NULL)
+    {
+        parent = oldElement->parent;
+        oldElement->parent = NULL;
+
+        detail = oldElement->detail;
+        oldElement->detail = NULL;
+
+        delete oldElement;
+    }
 }
+
+M5PanelUIElement::M5PanelUIElement(JsonObject json) : M5PanelUIElement(json, NULL) {}
 
 M5PanelUIElement::M5PanelUIElement(M5PanelUIElement *selection, JsonObject json, int i)
 {
