@@ -66,14 +66,13 @@ public:
 class M5PanelUIElement
 {
 private:
-    JsonObject json;
-
     void drawFrame(M5EPD_Canvas *canvas, int size);
     void drawTitle(M5EPD_Canvas *canvas, int size);
     void drawIcon(M5EPD_Canvas *canvas, int size);
     void drawStatusAndControlArea(M5EPD_Canvas *canvas, int size);
 
 public:
+    JsonObject json;
     M5PanelElementType type;
     String title;
     String icon;
@@ -94,5 +93,5 @@ public:
     void draw(M5EPD_Canvas *canvas, int x, int y, int size);
 
     String forwardTouch(String currentElement, uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
-    String processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas, int *highlightX, int *highlightY);
+    String processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas, int *highlightX, int *highlightY, void (**callback)(M5PanelUIElement *));
 };

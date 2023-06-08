@@ -103,16 +103,6 @@ bool httpRequest(String &url, String &response)
     return true;
 }
 
-void postWidgetValue(const String &itemName, const String &newValue)
-{
-    HTTPClient httpPost;
-    httpPost.setReuse(false);
-    httpPost.begin(restUrl + "/items/" + itemName);
-    httpPost.addHeader(F("Content-Type"), F("text/plain"));
-    httpPost.POST(newValue);
-    // httpPost.end();           // to be fixed, http client should be ended, but it also closes subscription client
-}
-
 bool subscribe()
 {
     String subscribeResponse;

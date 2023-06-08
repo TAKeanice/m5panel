@@ -1,6 +1,8 @@
 #include "M5PanelUI.h"
 #include <ArduinoJson.h>
 
+#include <HTTPClient.h>
+
 // Constants
 
 #define ELEMENT_ROWS 2
@@ -248,7 +250,9 @@ String M5PanelPage::processElementTouch(uint16_t x, uint16_t y, M5EPD_Canvas *ca
     if (elementIndex < numElements)
     {
         int highlightX, highlightY;
-        String newCurrentElement = elements[elementIndex]->processTouch(x - originX, y - originY, canvas, &highlightX, &highlightY);
+        void (*callback)(M5PanelUIElement *);
+        M5PanelUIElement *element = elements[elementIndex];
+        String newCurrentElement = element->processTouch(x - originX, y - originY, canvas, &highlightX, &highlightY, &callback);
         if (newCurrentElement != "")
         {
             return newCurrentElement;
@@ -258,6 +262,10 @@ String M5PanelPage::processElementTouch(uint16_t x, uint16_t y, M5EPD_Canvas *ca
             // react to touch graphically to give immediate feedback, since no navigation occurred
             canvas->pushCanvas(highlightX + originX + NAV_WIDTH + MARGIN, highlightY + originY + MARGIN, UPDATE_MODE_GC16);
             canvas->deleteCanvas();
+            if (callback != NULL)
+            {
+                callback(element);
+            }
         }
     }
     return identifier;
@@ -635,10 +643,51 @@ String M5PanelUIElement::forwardTouch(String currentElement, uint16_t x, uint16_
     return "";
 }
 
-String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas, int *highlightX, int *highlightY)
+void postValue(String link, String newState)
 {
-    // TODO process touch on title / icon or control area for interaction
+    HTTPClient httpPost;
+    httpPost.setReuse(false);
+    httpPost.begin(link);
+    httpPost.addHeader(F("Content-Type"), F("text/plain"));
+    httpPost.POST(newState);
+    //httpPost.end();
+}
+
+void sendChoiceTouch(M5PanelUIElement *touchedElement)
+{
+    Serial.println("send touch on choice");
+}
+
+void sendPlusTouch(M5PanelUIElement *touchedElement)
+{
+    Serial.println("send touch on plus");
+}
+
+void sendMinusTouch(M5PanelUIElement *touchedElement)
+{
+    Serial.println("send touch on minus");
+}
+
+void sendSwitchTouch(M5PanelUIElement *touchedElement)
+{
+    Serial.println("send touch on switch");
+    JsonObject json = touchedElement->json;
+    if (json["mapping"].isNull())
+    {
+        String newState = touchedElement->state == "ON" ? "OFF" : "ON";
+        postValue(json["item"]["link"], newState);
+    }
+    else
+    {
+        // respect the mapping
+    }
+}
+
+String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas, int *highlightX, int *highlightY, void (**callback)(M5PanelUIElement *))
+{
+    // process touch on title / icon or control area for interaction
     Serial.printf("Touched on item %s (title: %s) with coordinates (%d,%d) (relative to element frame)\n", identifier.c_str(), title.c_str(), x, y);
+
     if (y < ELEMENT_AREA_SIZE - ELEMENT_CONTROL_HEIGHT - MARGIN || type == M5PanelElementType::Frame || type == M5PanelElementType::Choice || type == M5PanelElementType::Text)
     {
         // touched in area for navigation
@@ -651,6 +700,7 @@ String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canv
         {
             // TODO send control action to OpenHab
             // navigate back to parent page (parent of parent element of parent page)
+            *callback = &sendChoiceTouch;
             return navigate(parent->parent->parent, canvas);
         }
     }
@@ -658,7 +708,6 @@ String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canv
     {
         int elementSize = ELEMENT_AREA_SIZE - 2 * MARGIN;
         // touched in area for state / control
-        // TODO send command
         switch (type)
         {
         case M5PanelElementType::Selection:
@@ -670,20 +719,19 @@ String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canv
             canvas->fillRect(0, 0, elementSize / 2, ELEMENT_CONTROL_HEIGHT, 8);
             if (x < ELEMENT_AREA_SIZE / 2)
             {
-                Serial.printf("Touched -");
                 // touched -
+                *callback = &sendMinusTouch;
                 *highlightX = MARGIN;
             }
             else
             {
-                Serial.printf("Touched +");
-                // touched +
+                *callback = &sendPlusTouch;
                 *highlightX = elementSize / 2 + MARGIN;
             }
             return "";
         case M5PanelElementType::Switch:
-            Serial.printf("Touched on switch");
             // touched switch
+            *callback = &sendSwitchTouch;
             canvas->createCanvas(elementSize, ELEMENT_CONTROL_HEIGHT);
             *highlightY = elementSize - ELEMENT_CONTROL_HEIGHT + MARGIN;
             *highlightX = MARGIN;
@@ -696,3 +744,6 @@ String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canv
 
     return "";
 }
+
+// TODO create switch clicked function
+// in that function, decide how to process switch: Basic switches (without value mappings) get switched from "on" to "off", with value mappings switch one value further.
