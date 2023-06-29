@@ -21,25 +21,20 @@
 M5EPD_Canvas canvas(&M5.EPD);
 
 HTTPClient httpClient;
-HTTPClient httpSubscribeClient;
-WiFiClient SubscribeClient;
+WiFiClient wifiClient;
+WiFiClient subscribeClient;
 
 String restUrl = "http://" + String(OPENHAB_HOST) + String(":") + String(OPENHAB_PORT) + String("/rest");
 String iconURL = "http://" + String(OPENHAB_HOST) + String(":") + String(OPENHAB_PORT) + String("/icon");
 String subscriptionURL = "";
-
-unsigned long upTime;
 
 DynamicJsonDocument jsonDoc(60000); // size to be checked
 
 M5PanelPage *rootPage = NULL;
 String currentPage = ""; // TODO store the current widget ID in here
 
-int previousSysInfoMillis = 0;
-int currentSysInfoMillis;
-
-int previousRefreshMillis = 0;
-int currentRefreshMillis;
+int loopStartMillis = 0;
+int interactionStartMillis = 0;
 
 uint16_t _last_pos_x = 0xFFFF, _last_pos_y = 0xFFFF;
 
@@ -107,7 +102,7 @@ bool subscribe()
 {
     String subscribeResponse;
     httpClient.useHTTP10(true);
-    httpClient.begin(restUrl + "/sitemaps/events/subscribe");
+    httpClient.begin(wifiClient, restUrl + "/sitemaps/events/subscribe");
     int httpCode = httpClient.POST("");
     if (httpCode != HTTP_CODE_OK)
     {
@@ -127,12 +122,12 @@ bool subscribe()
     debug(F("subscribe"), "Full subscriptionURL: " + subscriptionURL);
     subscriptionURL = subscriptionURL.substring(subscriptionURL.indexOf("/rest/sitemaps")) + "?sitemap=" + OPENHAB_SITEMAP + "&pageid=" + OPENHAB_SITEMAP; // Fix : pageId
     debug(F("subscribe"), "subscriptionURL: " + subscriptionURL);
-    SubscribeClient.connect(OPENHAB_HOST, OPENHAB_PORT);
-    SubscribeClient.println("GET " + subscriptionURL + " HTTP/1.1");
-    SubscribeClient.println("Host: " + String(OPENHAB_HOST) + ":" + String(OPENHAB_PORT));
-    SubscribeClient.println(F("Accept: text/event-stream"));
-    SubscribeClient.println(F("Connection: keep-alive"));
-    SubscribeClient.println();
+    subscribeClient.connect(OPENHAB_HOST, OPENHAB_PORT);
+    subscribeClient.println("GET " + subscriptionURL + " HTTP/1.1");
+    subscribeClient.println("Host: " + String(OPENHAB_HOST) + ":" + String(OPENHAB_PORT));
+    subscribeClient.println(F("Accept: text/event-stream"));
+    subscribeClient.println(F("Connection: keep-alive"));
+    subscribeClient.println();
     return true;
 }
 
@@ -239,34 +234,6 @@ void syncRTC()
     */
 }
 
-void displaySidebar()
-{
-    // Display system information
-    canvas.setTextSize(FONT_SIZE_STATUS_CENTER);
-    canvas.setTextDatum(TC_DATUM);
-
-    /*M5.RTC.getTime(&RTCtime);
-    char time[6];
-    snprintf(time,sizeof(time),"%02d:%02d",RTCtime.hour,RTCtime.min);
-    canvas.drawString(time,80,30);*/
-
-    canvas.drawString(openhabTZ.dateTime("H:i"), 80, 40);
-
-    canvas.setTextSize(FONT_SIZE_SYSINFO);
-    canvas.setTextDatum(TL_DATUM);
-
-    if (DISPLAY_SYSINFO)
-    {
-        upTime = millis() / (60000);
-
-        canvas.drawString("Heap: " + String(ESP.getFreeHeap()) + " B free", 0, 480);
-        canvas.drawString("Battery: " + String(M5.getBatteryVoltage()) + " mV", 0, 500);
-        canvas.drawString("Uptime: " + String(upTime) + " min", 0, 520);
-
-        canvas.pushCanvas(0, 0, UPDATE_MODE_A2);
-    }
-}
-
 void setup()
 {
     Serial.println(F("Setup start..."));
@@ -330,6 +297,7 @@ void setup()
     Serial.println(errorCode);
 
     canvas.createRender(FONT_SIZE_LABEL, FONT_CACHE_SIZE);
+    canvas.createRender(FONT_SIZE_LABEL_SMALL, FONT_CACHE_SIZE);
     canvas.createRender(FONT_SIZE_STATUS_CENTER, FONT_CACHE_SIZE);
     canvas.createRender(FONT_SIZE_STATUS_BOTTOM, FONT_CACHE_SIZE);
     canvas.createRender(FONT_SIZE_SYSINFO, FONT_CACHE_SIZE);
@@ -359,44 +327,43 @@ void setup()
         subscribe();
     }
 
-    // displaySidebar();
     updateSiteMap();
 }
 
-// Loop
-void loop()
+void checkSubscription()
 {
-    if (!SAMPLE_SITEMAP)
+    // Subscribe or re-subscribe to sitemap
+    if (!subscribeClient.connected())
     {
-
-        // Subscribe or re-subscribe to sitemap
-        if (!SubscribeClient.connected())
+        Serial.println(F("subscribeClient not connected, connecting..."));
+        if (!subscribe())
         {
-            Serial.println(F("SubscribeClient not connected, connecting..."));
-            if (!subscribe())
-            {
-                delay(300);
-            }
-        }
-
-        // Check and get subscription data
-        while (SubscribeClient.available())
-        {
-            String SubscriptionReceivedData = SubscribeClient.readStringUntil('\n');
-            int dataStart = SubscriptionReceivedData.indexOf("data: ");
-            if (dataStart > -1) // received data contains "data: "
-            {
-                String SubscriptionData = SubscriptionReceivedData.substring(dataStart + 6); // Remove chars before "data: "
-                int dataEnd = SubscriptionData.indexOf("\n\n");
-                SubscriptionData = SubscriptionData.substring(0, dataEnd);
-                parseSubscriptionData(SubscriptionData);
-            }
+            delay(300);
         }
     }
 
-    // Check touch
+    // Check and get subscription data
+    while (subscribeClient.available())
+    {
+        String subscriptionReceivedData = subscribeClient.readStringUntil('\n');
+        debug(F("loop"), "received subscription " + subscriptionReceivedData);
+        int dataStart = subscriptionReceivedData.indexOf("data: ");
+        if (dataStart > -1) // received data contains "data: "
+        {
+            String subscriptionData = subscriptionReceivedData.substring(dataStart + 6); // Remove chars before "data: "
+            int dataEnd = subscriptionData.indexOf("\n\n");
+            subscriptionData = subscriptionData.substring(0, dataEnd);
+            parseSubscriptionData(subscriptionData);
+        }
+    }
+}
+
+void checkTouch()
+{
     if (M5.TP.avaliable())
     {
+        interactionStartMillis = loopStartMillis;
+
         M5.TP.update();
         bool is_finger_up = M5.TP.isFingerUp();
         if (is_finger_up)
@@ -405,6 +372,8 @@ void loop()
             {
                 // process touch on finger lifting
                 currentPage = rootPage->processTouch(currentPage, _last_pos_x, _last_pos_y, &canvas);
+                // TODO create subscription for new current page! Remove last _x (where x is the page number) and use as pageId
+                // TODO request initial update for new current page, since not all pages have a subscription running
                 debug(F("loop"), "new current page after touch: " + currentPage);
                 _last_pos_x = _last_pos_y = 0xFFFF;
             }
@@ -416,24 +385,36 @@ void loop()
         }
         M5.TP.flush();
     }
+}
 
-    // Display sysinfo
-    currentSysInfoMillis = millis();
-    if ((currentSysInfoMillis - previousSysInfoMillis) > 10000)
+// Loop
+void loop()
+{
+    loopStartMillis = millis();
+    if (!SAMPLE_SITEMAP)
     {
-        previousSysInfoMillis = currentSysInfoMillis;
-        // displaySidebar();
-        //  debug("loop","Total PSRAM: %d" + String(ESP.getPsramSize()));
-        //  debug("loop","Free PSRAM: %d" + String(ESP.getFreePsram()));
+        checkSubscription();
     }
 
-    // Full refresh every 10 minutes to clear artefacts
-    /*currentRefreshMillis = millis();
-    if ((currentRefreshMillis - previousRefreshMillis) > 600000) // 600000
-    {
-        previousRefreshMillis = currentRefreshMillis;
-        M5.EPD.UpdateFull(UPDATE_MODE_GL16);
-        debug("Loop", "Full refresh");
-    }*/
+    checkTouch();
+
     events(); // for ezTime
+
+    int loopEndMillis = millis();
+    int loopDuration = loopEndMillis - loopStartMillis;
+    int durationSinceInteraction = interactionStartMillis - loopEndMillis;
+    if (durationSinceInteraction < 45000)
+    {
+        int sleepMillisShort = 50 - loopDuration;
+        // responsive within the first 45s after last touch
+        if (sleepMillisShort > 0)
+        {
+            sleep(sleepMillisShort);
+        }
+    }
+    else
+    {
+        // shut down M5 to save energy
+        M5.shutdown(120);
+    }
 }

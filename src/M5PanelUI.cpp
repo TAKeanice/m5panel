@@ -27,6 +27,8 @@
 
 #define LINE_THICKNESS 3
 
+WiFiClient commandWifiClient;
+
 // Utility functions
 
 String parseWidgetLabel(String label)
@@ -605,15 +607,18 @@ void M5PanelUIElement::drawStatusAndControlArea(M5EPD_Canvas *canvas, int elemen
         canvas->drawString("-", MARGIN, controlYCenter);
         canvas->setTextDatum(MR_DATUM);
         canvas->drawString("+", elementSize - MARGIN, controlYCenter);
+        // also draw control area --> no break
     case M5PanelElementType::Selection:
     case M5PanelElementType::Switch:
+        // draw divider
+        canvas->drawLine(0, controlY, elementSize - LINE_THICKNESS, controlY, LINE_THICKNESS, 15);
+        // also draw text --> no break
     case M5PanelElementType::Text:
         // draw status
         canvas->setTextSize(FONT_SIZE_LABEL);
         canvas->setTextDatum(MC_DATUM);
         canvas->drawString(state, elementCenter, controlYCenter);
-        // draw divider
-        canvas->drawLine(0, controlY, elementSize - LINE_THICKNESS, controlY, LINE_THICKNESS, 15);
+        break;
     default:
         break;
     }
@@ -647,10 +652,10 @@ void postValue(String link, String newState)
 {
     HTTPClient httpPost;
     httpPost.setReuse(false);
-    httpPost.begin(link);
+    httpPost.begin(commandWifiClient, link);
     httpPost.addHeader(F("Content-Type"), F("text/plain"));
     httpPost.POST(newState);
-    //httpPost.end();
+    httpPost.end();
 }
 
 void sendChoiceTouch(M5PanelUIElement *touchedElement)
@@ -672,15 +677,30 @@ void sendSwitchTouch(M5PanelUIElement *touchedElement)
 {
     Serial.println("send touch on switch");
     JsonObject json = touchedElement->json;
-    if (json["mapping"].isNull())
+    // Decide how to process switch: Basic switches (without value mappings) get switched from "on" to "off", with value mappings switch one value further.
+    // TODO same for json["item"]["commandDescription"]["commandOptions"]
+    String newState;
+    if (json["mappings"].isNull())
     {
-        String newState = touchedElement->state == "ON" ? "OFF" : "ON";
-        postValue(json["item"]["link"], newState);
+        newState = touchedElement->state == "ON" ? "OFF" : "ON";
     }
     else
     {
-        // respect the mapping
+        JsonArray mappings = json["mappings"];
+        size_t currentStateIndex;
+        for (size_t i = 0; i < mappings.size(); i++)
+        {
+            JsonObject mapping = mappings[i];
+            String jsonState = json["state"];
+            if (mapping["command"] == jsonState)
+            {
+                currentStateIndex = (i + 1) % mappings.size();
+                break;
+            }
+        }
+        newState = mappings[i]["command"];
     }
+    postValue(json["item"]["link"], newState);
 }
 
 String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas, int *highlightX, int *highlightY, void (**callback)(M5PanelUIElement *))
@@ -744,6 +764,3 @@ String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canv
 
     return "";
 }
-
-// TODO create switch clicked function
-// in that function, decide how to process switch: Basic switches (without value mappings) get switched from "on" to "off", with value mappings switch one value further.
