@@ -8,8 +8,11 @@
 #include <regex>
 #include "M5PanelUI.h"
 #include "defs.h"
+#include "ImageResource.h"
 
 #define SAVED_STATE_FILE "/savedState"
+#define TIME_UNTIL_SLEEP 120
+#define UPTIME_AUTOMATIC_BOOT 20
 
 #define ERR_WIFI_NOT_CONNECTED "ERROR: Wifi not connected"
 #define ERR_HTTP_ERROR "ERROR: HTTP code "
@@ -35,8 +38,8 @@ DynamicJsonDocument jsonDoc(60000); // size to be checked
 M5PanelPage *rootPage = NULL;
 String currentPage = "";
 
-int loopStartMillis = 0;
-int interactionStartMillis = 0;
+unsigned long loopStartMillis = 0;
+long interactionStartMillis = 0;
 
 uint16_t _last_pos_x = 0xFFFF, _last_pos_y = 0xFFFF;
 
@@ -155,13 +158,16 @@ void updateSiteMap()
 
     JsonObject rootPageJson = jsonDoc.as<JsonObject>()["homepage"];
     rootPage = new M5PanelPage(rootPageJson);
-    if (currentPage == "") {
+    debug(F("updateSiteMap"), "current page: " + currentPage);
+    if (currentPage == "")
+    {
         currentPage = rootPage->identifier;
     }
     debug(F("updateSiteMap"), "5:" + String(ESP.getFreeHeap()));
 
-    if (!rootPage->draw(currentPage, &canvas)) {
-        //reset page because the formerly displayed page disappeared
+    if (!rootPage->draw(currentPage, &canvas))
+    {
+        // reset page because the formerly displayed page disappeared
         currentPage = rootPage->identifier;
         rootPage->draw(&canvas);
     }
@@ -242,22 +248,39 @@ void syncRTC()
     */
 }
 
+boolean readSavedState()
+{
+    if (LittleFS.exists(SAVED_STATE_FILE))
+    {
+        File savedState = LittleFS.open(SAVED_STATE_FILE);
+        currentPage = savedState.readString();
+        debug(F("readSavedState"), "read current page from saved file: " + currentPage);
+        savedState.close();
+        LittleFS.remove(SAVED_STATE_FILE);
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+
 void setup()
 {
     Serial.println(F("Setup start..."));
 
-    M5.begin(true, false, true, true, false); // bool touchEnable = true, bool SDEnable = false, bool SerialEnable = true, bool BatteryADCEnable = true, bool I2CEnable = false
+    if (M5.BtnP.read() == 0)
+    {
+        // was booted up on automatic request, sleep again quickly
+        interactionStartMillis = (-TIME_UNTIL_SLEEP + UPTIME_AUTOMATIC_BOOT) * 1000;
+    }
+
+    M5.begin(true, false, true, false, false); // bool touchEnable = true, bool SDEnable = false, bool SerialEnable = true, bool BatteryADCEnable = false, bool I2CEnable = false
+    gpio_deep_sleep_hold_dis();
     M5.disableEXTPower();
-    /* Uncomment for static IP
-        IPAddress ip(192,168,0,xxx);    // Node Static IP
-        IPAddress gateway(192,168,0,xxx); // Network Gateway (usually Router IP)
-        IPAddress subnet(255,255,255,0);  // Subnet Mask
-        IPAddress dns1(xxx,xxx,xxx,xxx);    // DNS1 IP
-        IPAddress dns2(xxx,xxx,xxx,xxx);    // DNS2 IP
-        WiFi.config(ip, gateway, subnet, dns1, dns2);
-    */
+
     // M5.EPD.SetRotation(180);
-    M5.EPD.Clear(true);
+    M5.EPD.Clear(false);
     M5.RTC.begin();
 
     // FS Setup
@@ -281,21 +304,11 @@ void setup()
         Serial.println(F("!An error occurred during LittleFS mounting"));
     }
 
-    // read and remove saved state
-    if (LittleFS.exists(SAVED_STATE_FILE))
-    {
-        File savedState = LittleFS.open(SAVED_STATE_FILE);
-        currentPage = savedState.readString();
-        debug(F("setup"), "read current page from saved file: " + currentPage);
-        savedState.close();
-        LittleFS.remove(SAVED_STATE_FILE);
-    }
-
     // Get all information of LittleFS
     unsigned int totalBytes = LittleFS.totalBytes();
     unsigned int usedBytes = LittleFS.usedBytes();
 
-    // TODO : Should fail and stop if SPIFFS error
+    // TODO : Should fail and stop if littlefs error
 
     Serial.println("===== File system info =====");
 
@@ -321,6 +334,9 @@ void setup()
     canvas.createRender(FONT_SIZE_SYSINFO, FONT_CACHE_SIZE);
 
     canvas.setTextSize(FONT_SIZE_LABEL);
+
+    // read and remove saved state
+    readSavedState();
 
     // Setup Wifi
     if (!SAMPLE_SITEMAP)
@@ -364,7 +380,7 @@ void checkSubscription()
     while (subscribeClient.available())
     {
         String subscriptionReceivedData = subscribeClient.readStringUntil('\n');
-        debug(F("loop"), "received subscription " + subscriptionReceivedData);
+        debug(F("checkSubscription"), "received subscription " + subscriptionReceivedData);
         int dataStart = subscriptionReceivedData.indexOf("data: ");
         if (dataStart > -1) // received data contains "data: "
         {
@@ -380,19 +396,21 @@ void checkTouch()
 {
     if (M5.TP.avaliable())
     {
-        interactionStartMillis = loopStartMillis;
-
         M5.TP.update();
         bool is_finger_up = M5.TP.isFingerUp();
         if (is_finger_up)
         {
             if (_last_pos_x != 0xFFFF && _last_pos_y != 0xFFFF)
             {
+                // user interaction detected
+                debug(F("checkTouch"), "resetting interactionStartMillis");
+                interactionStartMillis = loopStartMillis;
+
                 // process touch on finger lifting
                 currentPage = rootPage->processTouch(currentPage, _last_pos_x, _last_pos_y, &canvas);
                 // TODO create subscription for new current page! Remove last _x (where x is the page number) and use as pageId
                 // TODO request initial update for new current page, since not all pages have a subscription running
-                debug(F("loop"), "new current page after touch: " + currentPage);
+                debug(F("checkTouch"), "new current page after touch: " + currentPage);
                 _last_pos_x = _last_pos_y = 0xFFFF;
             }
         }
@@ -403,6 +421,84 @@ void checkTouch()
         }
         M5.TP.flush();
     }
+}
+
+void showBatteryIndicator()
+{
+    M5.BatteryADCBegin();
+
+    canvas.createCanvas(150, 40);
+
+    int img_y = 5;
+    int img_x = 40;
+    int img_height = 32;
+    int img_width = 32;
+
+    canvas.pushImage(img_x, img_y, 32, 32, ImageResource_status_bar_battery_32x32);
+    uint32_t vol = M5.getBatteryVoltage();
+
+    if (vol < 3300)
+    {
+        vol = 3300;
+    }
+    else if (vol > 4350)
+    {
+        vol = 4350;
+    }
+    float battery = (float)(vol - 3300) / (float)(4350 - 3300);
+    if (battery <= 0.01)
+    {
+        battery = 0.01;
+    }
+    if (battery > 1)
+    {
+        battery = 1;
+    }
+    uint8_t px = battery * 25;
+    char buf[4];
+    sprintf(buf, "%d%%", (int)(battery * 100));
+    canvas.fillRect(img_x + 3, img_y + 10, px, 13, 15);
+
+    canvas.setTextDatum(ML_DATUM);
+    canvas.setTextSize(FONT_SIZE_LABEL_SMALL);
+    canvas.drawString(buf, img_x + img_width + 5, img_y + img_height / 2);
+    canvas.pushCanvas(0, 500, UPDATE_MODE_GLD16);
+
+    canvas.deleteCanvas();
+}
+
+void shutdown()
+{
+    // TODO draw hint for wakeup by button press
+    // TODO configure to wake up from side button if possible
+
+    showBatteryIndicator();
+
+    File savedState = LittleFS.open(SAVED_STATE_FILE, "w", true);
+    savedState.print(currentPage.c_str());
+    savedState.close();
+
+    canvas.createCanvas(150, 30);
+    canvas.setTextSize(FONT_SIZE_LABEL);
+    canvas.setTextDatum(TL_DATUM);
+    canvas.drawString("ZzzZzz", 40, 0);
+    canvas.pushCanvas(0, 70, UPDATE_MODE_DU);
+
+    canvas.deleteCanvas();
+
+    delay(1000);
+
+    // shut down M5 to save energy
+    // M5.shutdown(20);
+
+    M5.disableEPDPower();
+    M5.disableEXTPower();
+    M5.disableMainPower();
+    esp_sleep_enable_ext0_wakeup(GPIO_NUM_36, LOW); // TOUCH_INT
+    esp_sleep_enable_timer_wakeup(REFRESH_INTERVAL * 1000000);
+    esp_deep_sleep_start();
+    while (1)
+        ;
 }
 
 // Loop
@@ -418,27 +514,13 @@ void loop()
 
     events(); // for ezTime
 
-    int loopEndMillis = millis();
-    int loopDuration = loopEndMillis - loopStartMillis;
-    int durationSinceInteraction = interactionStartMillis - loopEndMillis;
-    if (durationSinceInteraction < 45000)
-    {
-        int sleepMillisShort = 50 - loopDuration;
-        // responsive within the first 45s after last touch
-        if (sleepMillisShort > 0)
-        {
-            sleep(sleepMillisShort);
-        }
-    }
-    else
-    {
-        // TODO draw hint for wakeup by button press
+    unsigned long durationSinceInteraction = loopStartMillis - interactionStartMillis;
 
-        File savedState = LittleFS.open(SAVED_STATE_FILE, "w", true);
-        savedState.print(currentPage.c_str());
-        savedState.close();
-
-        // shut down M5 to save energy
-        M5.shutdown(240);
+    if (durationSinceInteraction > (TIME_UNTIL_SLEEP * 1000))
+    {
+        debug(F("loop"), "Shutting down after " + String(durationSinceInteraction) + "ms since interaction");
+        shutdown();
     }
+
+    delay(50);
 }

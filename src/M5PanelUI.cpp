@@ -142,7 +142,7 @@ boolean M5PanelPage::draw(String pageIdentifier, M5EPD_Canvas *canvas)
         }
     }
 
-    return next->draw(pageIdentifier, canvas);
+    return next == NULL ? false : next->draw(pageIdentifier, canvas);
 }
 
 void M5PanelPage::draw(M5EPD_Canvas *canvas)
