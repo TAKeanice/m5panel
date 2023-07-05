@@ -512,6 +512,7 @@ M5PanelUIElement::M5PanelUIElement(M5PanelUIElement *selection, JsonObject json,
     // TODO icon?
     identifier = selection->identifier + "_choice_" + i;
     type = M5PanelElementType::Choice;
+    this->json = json;
 }
 
 M5PanelUIElement::~M5PanelUIElement()
@@ -661,6 +662,19 @@ void postValue(String link, String newState)
 void sendChoiceTouch(M5PanelUIElement *touchedElement)
 {
     Serial.println("send touch on choice");
+    JsonObject json = touchedElement->json;
+    JsonArray choices = json["item"]["commandDescription"]["commandOptions"];
+    // find command for touched choice
+    for (size_t i = 0; i < choices.size(); i++)
+    {
+        JsonObject choice = choices[i];
+        String touchedChoice = touchedElement->title;
+        if (choice["label"] == touchedChoice)
+        {
+            postValue(json["item"]["link"], choice["command"]);
+            return;
+        }
+    }
 }
 
 void sendPlusTouch(M5PanelUIElement *touchedElement)
@@ -687,18 +701,20 @@ void sendSwitchTouch(M5PanelUIElement *touchedElement)
     else
     {
         JsonArray mappings = json["mappings"];
-        size_t currentStateIndex;
+        size_t nextStateIndex;
+        // find next state in mapping list
         for (size_t i = 0; i < mappings.size(); i++)
         {
             JsonObject mapping = mappings[i];
             String jsonState = json["state"];
             if (mapping["command"] == jsonState)
             {
-                currentStateIndex = (i + 1) % mappings.size();
+                nextStateIndex = (i + 1) % mappings.size();
                 break;
             }
         }
-        newState = mappings[i]["command"];
+        // implicitly uses first state when current state not found
+        newState = mappings[nextStateIndex]["command"].as<String>();
     }
     postValue(json["item"]["link"], newState);
 }
