@@ -675,7 +675,6 @@ void postValue(String link, String newState)
     Serial.printf("Sending value %s\n", newState.c_str());
     WiFiClient commandWifiClient;
     HTTPClient httpPost;
-    httpPost.setReuse(false);
     httpPost.begin(commandWifiClient, link);
     httpPost.addHeader(F("Content-Type"), F("text/plain"));
     httpPost.POST(newState);

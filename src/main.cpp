@@ -88,7 +88,6 @@ bool httpRequest(String &url, String &response)
     HTTPClient httpClient;
 
     httpClient.useHTTP10(true);
-    httpClient.setReuse(false);
     httpClient.begin(wifiClient, url);
     int httpCode = httpClient.GET();
     if (httpCode != HTTP_CODE_OK)
@@ -148,7 +147,6 @@ bool subscribe()
     HTTPClient httpClient;
 
     httpClient.useHTTP10(true);
-    httpClient.setReuse(false);
     httpClient.begin(wifiClient, restUrl + "/sitemaps/events/subscribe");
     int httpCode = httpClient.POST("");
     if (httpCode != HTTP_CODE_OK)
