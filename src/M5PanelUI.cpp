@@ -125,6 +125,26 @@ M5PanelPage::~M5PanelPage()
     delete next;
 }
 
+boolean M5PanelPage::draw(String pageIdentifier, M5EPD_Canvas *canvas)
+{
+    if (identifier == pageIdentifier)
+    {
+        draw(canvas);
+        return true;
+    }
+
+    for (size_t i = 0; i < numElements; i++)
+    {
+        M5PanelPage *detailPage = elements[i]->detail;
+        if (detailPage != NULL && detailPage->draw(pageIdentifier, canvas))
+        {
+            return true;
+        }
+    }
+
+    return next->draw(pageIdentifier, canvas);
+}
+
 void M5PanelPage::draw(M5EPD_Canvas *canvas)
 {
     // clear

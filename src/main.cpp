@@ -9,6 +9,8 @@
 #include "M5PanelUI.h"
 #include "defs.h"
 
+#define SAVED_STATE_FILE "/savedState"
+
 #define ERR_WIFI_NOT_CONNECTED "ERROR: Wifi not connected"
 #define ERR_HTTP_ERROR "ERROR: HTTP code "
 #define ERR_GETITEMSTATE "ERROR in getItemState"
@@ -31,7 +33,7 @@ String subscriptionURL = "";
 DynamicJsonDocument jsonDoc(60000); // size to be checked
 
 M5PanelPage *rootPage = NULL;
-String currentPage = ""; // TODO store the current widget ID in here
+String currentPage = "";
 
 int loopStartMillis = 0;
 int interactionStartMillis = 0;
@@ -153,10 +155,16 @@ void updateSiteMap()
 
     JsonObject rootPageJson = jsonDoc.as<JsonObject>()["homepage"];
     rootPage = new M5PanelPage(rootPageJson);
-    currentPage = rootPage->identifier;
+    if (currentPage == "") {
+        currentPage = rootPage->identifier;
+    }
     debug(F("updateSiteMap"), "5:" + String(ESP.getFreeHeap()));
 
-    rootPage->draw(&canvas);
+    if (!rootPage->draw(currentPage, &canvas)) {
+        //reset page because the formerly displayed page disappeared
+        currentPage = rootPage->identifier;
+        rootPage->draw(&canvas);
+    }
 }
 
 void parseSubscriptionData(String jsonDataStr)
@@ -271,6 +279,16 @@ void setup()
     else
     {
         Serial.println(F("!An error occurred during LittleFS mounting"));
+    }
+
+    // read and remove saved state
+    if (LittleFS.exists(SAVED_STATE_FILE))
+    {
+        File savedState = LittleFS.open(SAVED_STATE_FILE);
+        currentPage = savedState.readString();
+        debug(F("setup"), "read current page from saved file: " + currentPage);
+        savedState.close();
+        LittleFS.remove(SAVED_STATE_FILE);
     }
 
     // Get all information of LittleFS
@@ -414,7 +432,13 @@ void loop()
     }
     else
     {
+        // TODO draw hint for wakeup by button press
+
+        File savedState = LittleFS.open(SAVED_STATE_FILE, "w", true);
+        savedState.print(currentPage.c_str());
+        savedState.close();
+
         // shut down M5 to save energy
-        M5.shutdown(120);
+        M5.shutdown(240);
     }
 }

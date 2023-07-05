@@ -51,6 +51,7 @@ public:
     M5PanelPage(M5PanelUIElement *selection, JsonObject json);
     ~M5PanelPage();
 
+    boolean draw(String pageIdentifier, M5EPD_Canvas *canvas);
     void draw(M5EPD_Canvas *canvas);
 
     /**
