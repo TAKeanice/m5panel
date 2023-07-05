@@ -25,18 +25,16 @@
 // Global vars
 M5EPD_Canvas canvas(&M5.EPD);
 
-HTTPClient httpClient;
-WiFiClient wifiClient;
 WiFiClient subscribeClient;
 
 String restUrl = "http://" + String(OPENHAB_HOST) + String(":") + String(OPENHAB_PORT) + String("/rest");
 String iconURL = "http://" + String(OPENHAB_HOST) + String(":") + String(OPENHAB_PORT) + String("/icon");
-String subscriptionURL = "";
+String subscriptionId = "";
 
 DynamicJsonDocument jsonDoc(60000); // size to be checked
 
 M5PanelPage *rootPage = NULL;
-String currentPage = "";
+String currentPage = "" + String(OPENHAB_SITEMAP) + "_0";
 
 unsigned long loopStartMillis = 0;
 long interactionStartMillis = 0;
@@ -78,7 +76,6 @@ bool httpRequest(String &url, String &response)
         return false;
     }
 
-    HTTPClient http;
     debug(F("httpRequest"), "HTTP request to " + String(url));
     if (WiFi.status() != WL_CONNECTED)
     {
@@ -86,27 +83,72 @@ bool httpRequest(String &url, String &response)
         response = String(ERR_WIFI_NOT_CONNECTED);
         return false;
     }
-    http.useHTTP10(true);
-    http.setReuse(false);
-    http.begin(url);
-    int httpCode = http.GET();
+
+    WiFiClient wifiClient;
+    HTTPClient httpClient;
+
+    httpClient.useHTTP10(true);
+    httpClient.setReuse(false);
+    httpClient.begin(wifiClient, url);
+    int httpCode = httpClient.GET();
     if (httpCode != HTTP_CODE_OK)
     {
         Serial.println(String(ERR_HTTP_ERROR) + String(httpCode));
         response = String(ERR_HTTP_ERROR) + String(httpCode);
-        http.end();
+        httpClient.end();
         return false;
     }
-    response = http.getString();
-    http.end();
+    response = httpClient.getString();
+    httpClient.end();
     debug(F("httpRequest"), F("HTTP request done"));
     return true;
+}
+
+String getCurrentPageId()
+{
+    int cutoffIdx = currentPage.length() - 1;
+    int choicesIdx = currentPage.lastIndexOf("_choices_");
+    if (choicesIdx > 0)
+    {
+        cutoffIdx = choicesIdx;
+    }
+    int pageSeparatorIdx = currentPage.lastIndexOf("_");
+    if (pageSeparatorIdx > 0)
+    {
+        cutoffIdx = pageSeparatorIdx;
+    }
+    return currentPage.substring(0, cutoffIdx);
+}
+
+void updateAndSubscribeCurrentPage()
+{
+    String page = getCurrentPageId();
+
+    String pageUpdate;
+    httpRequest(restUrl + "/sitemaps/" + OPENHAB_SITEMAP + "/" + page + "?subscriptionid=" + subscriptionId, pageUpdate);
+    DynamicJsonDocument jsonData(30000);
+    deserializeJson(jsonData, pageUpdate);
+    debug(F("updateAndSubscribeCurrentPage"), pageUpdate);
+    JsonArray widgets = jsonData["widgets"];
+    for (size_t i = 0; i < widgets.size(); i++)
+    {
+        String widgetId = widgets[i]["widgetId"].as<String>();
+        debug(F("updateAndSubscribeCurrentPage"), "update widget with id " + widgetId);
+        rootPage->updateWidget(widgets[i], widgetId, currentPage, &canvas);
+    }
+
+    jsonData.clear();
 }
 
 bool subscribe()
 {
     String subscribeResponse;
+
+    WiFiClient wifiClient;
+    HTTPClient httpClient;
+
     httpClient.useHTTP10(true);
+    httpClient.setReuse(false);
     httpClient.begin(wifiClient, restUrl + "/sitemaps/events/subscribe");
     int httpCode = httpClient.POST("");
     if (httpCode != HTTP_CODE_OK)
@@ -123,23 +165,31 @@ bool subscribe()
     deserializeJson(subscribeResponseJson, subscribeResponse);
 
     // String subscriptionURL = subscribeResponseJson["Location"].as<String>();
-    String subscriptionURL = subscribeResponseJson["context"]["headers"]["Location"][0];
-    debug(F("subscribe"), "Full subscriptionURL: " + subscriptionURL);
-    subscriptionURL = subscriptionURL.substring(subscriptionURL.indexOf("/rest/sitemaps")) + "?sitemap=" + OPENHAB_SITEMAP + "&pageid=" + OPENHAB_SITEMAP; // Fix : pageId
-    debug(F("subscribe"), "subscriptionURL: " + subscriptionURL);
+    String baseUrl = subscribeResponseJson["context"]["headers"]["Location"][0];
+    debug(F("subscribe"), "Full subscriptionURL: " + baseUrl);
+
+    subscribeResponseJson.clear();
+
+    subscriptionId = baseUrl.substring(baseUrl.lastIndexOf("/") + 1);
+
+    String subscriptionURL = baseUrl.substring(baseUrl.indexOf("/rest/sitemaps"));
+    String parametrizedUrl = subscriptionURL + "?sitemap=" + OPENHAB_SITEMAP + "&pageid=" + getCurrentPageId();
+    debug(F("subscribe"), "subscriptionURL: " + parametrizedUrl);
     subscribeClient.connect(OPENHAB_HOST, OPENHAB_PORT);
-    subscribeClient.println("GET " + subscriptionURL + " HTTP/1.1");
+    subscribeClient.println("GET " + parametrizedUrl + " HTTP/1.1");
     subscribeClient.println("Host: " + String(OPENHAB_HOST) + ":" + String(OPENHAB_PORT));
     subscribeClient.println(F("Accept: text/event-stream"));
     subscribeClient.println(F("Connection: keep-alive"));
     subscribeClient.println();
+
+    updateAndSubscribeCurrentPage();
+
     return true;
 }
 
 void updateSiteMap()
 {
     jsonDoc.clear(); // jsonDoc needed to stay because elements refer to it
-    debug(F("updateSiteMap"), "1:" + String(ESP.getFreeHeap()));
     String sitemapStr;
 
 #if SAMPLE_SITEMAP
@@ -150,9 +200,7 @@ void updateSiteMap()
     httpRequest(restUrl + "/sitemaps/" + OPENHAB_SITEMAP, sitemapStr);
 #endif
 
-    debug(F("updateSiteMap"), "2:" + String(ESP.getFreeHeap()));
     deserializeJson(jsonDoc, sitemapStr, DeserializationOption::NestingLimit(50));
-    debug(F("updateSiteMap"), "3:" + String(ESP.getFreeHeap()));
 
     delete rootPage;
 
@@ -163,7 +211,6 @@ void updateSiteMap()
     {
         currentPage = rootPage->identifier;
     }
-    debug(F("updateSiteMap"), "5:" + String(ESP.getFreeHeap()));
 
     if (!rootPage->draw(currentPage, &canvas))
     {
@@ -357,11 +404,14 @@ void setup()
         setInterval(3600);
         waitForSync();
         setTimeZone();
-
-        subscribe();
     }
 
     updateSiteMap();
+
+    if (!SAMPLE_SITEMAP)
+    {
+        subscribe();
+    }
 }
 
 void checkSubscription()
@@ -407,10 +457,13 @@ void checkTouch()
                 interactionStartMillis = loopStartMillis;
 
                 // process touch on finger lifting
-                currentPage = rootPage->processTouch(currentPage, _last_pos_x, _last_pos_y, &canvas);
-                // TODO create subscription for new current page! Remove last _x (where x is the page number) and use as pageId
-                // TODO request initial update for new current page, since not all pages have a subscription running
-                debug(F("checkTouch"), "new current page after touch: " + currentPage);
+                String newPage = rootPage->processTouch(currentPage, _last_pos_x, _last_pos_y, &canvas);
+                if (currentPage != newPage)
+                {
+                    currentPage = newPage;
+                    debug(F("checkTouch"), "new current page after touch: " + currentPage);
+                    updateAndSubscribeCurrentPage();
+                }
                 _last_pos_x = _last_pos_y = 0xFFFF;
             }
         }

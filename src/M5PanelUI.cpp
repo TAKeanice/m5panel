@@ -27,8 +27,6 @@
 
 #define LINE_THICKNESS 3
 
-WiFiClient commandWifiClient;
-
 // Utility functions
 
 String parseWidgetLabel(String label)
@@ -344,6 +342,7 @@ String M5PanelPage::updateWidget(JsonObject json, String widgetId, String curren
         Serial.printf("found widget %s\n", widgetId.c_str());
         // replace widget
         elements[i] = new M5PanelUIElement(json, element);
+        element = elements[i]; // prevent further use of old element
         if (currentPage == identifier)
         {
             Serial.printf("redraw element %s\n", element->identifier.c_str());
@@ -495,6 +494,19 @@ M5PanelUIElement::M5PanelUIElement(JsonObject newJson, M5PanelUIElement *oldElem
 
     Serial.println("Initialized element: " + title + " with icon: " + icon + " state: " + state + " type: " + typeString);
 
+    if (oldElement != NULL)
+    {
+        parent = oldElement->parent;
+        oldElement->parent = NULL;
+
+        detail = oldElement->detail;
+        oldElement->detail = NULL;
+
+        delete oldElement;
+
+        return;
+    }
+
     // frames can have direct widgets, other items always seem to have a "linked page"
     JsonArray widgets = json["widgets"];
     JsonObject linkedPageJson = json["linkedPage"];
@@ -506,17 +518,6 @@ M5PanelUIElement::M5PanelUIElement(JsonObject newJson, M5PanelUIElement *oldElem
 
     detail = new M5PanelPage(widgets.size() != 0 ? json : linkedPageJson);
     setParentForPageAndSuccessors(detail, this);
-
-    if (oldElement != NULL)
-    {
-        parent = oldElement->parent;
-        oldElement->parent = NULL;
-
-        detail = oldElement->detail;
-        oldElement->detail = NULL;
-
-        delete oldElement;
-    }
 }
 
 M5PanelUIElement::M5PanelUIElement(JsonObject json) : M5PanelUIElement(json, NULL) {}
@@ -671,6 +672,8 @@ String M5PanelUIElement::forwardTouch(String currentElement, uint16_t x, uint16_
 
 void postValue(String link, String newState)
 {
+    Serial.printf("Sending value %s\n", newState.c_str());
+    WiFiClient commandWifiClient;
     HTTPClient httpPost;
     httpPost.setReuse(false);
     httpPost.begin(commandWifiClient, link);
@@ -714,7 +717,8 @@ void sendSwitchTouch(M5PanelUIElement *touchedElement)
     // Decide how to process switch: Basic switches (without value mappings) get switched from "on" to "off", with value mappings switch one value further.
     // TODO same for json["item"]["commandDescription"]["commandOptions"]
     String newState;
-    if (json["mappings"].isNull())
+    JsonArray mappings = json["mappings"];
+    if (mappings.isNull() || mappings.size() == 0)
     {
         newState = touchedElement->state == "ON" ? "OFF" : "ON";
     }
