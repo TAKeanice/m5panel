@@ -48,13 +48,21 @@ String parseWidgetLabel(String label)
 
 void setParent(M5PanelUIElement *element, M5PanelPage *parent)
 {
-    Serial.printf("setting parent of %s to %s\n", element->identifier.c_str(), parent != NULL ? parent->identifier.c_str() : "NULL");
+    Serial.printf("setting parent of %s (%s) to %s (%s)\n",
+                  element->title.c_str(),
+                  element->identifier.c_str(),
+                  parent != NULL ? parent->title.c_str() : "NULL",
+                  parent != NULL ? parent->identifier.c_str() : "NULL");
     element->parent = parent;
 }
 
 void setParent(M5PanelPage *page, M5PanelUIElement *parent)
 {
-    Serial.printf("setting parent of %s to %s\n", page->identifier.c_str(), parent != NULL ? parent->identifier.c_str() : "NULL");
+    Serial.printf("setting parent of %s (%s) to %s (%s)\n",
+                  page->title.c_str(),
+                  page->identifier.c_str(),
+                  parent != NULL ? parent->title.c_str() : "NULL",
+                  parent != NULL ? parent->identifier.c_str() : "NULL");
     page->parent = parent;
 }
 
@@ -159,25 +167,28 @@ boolean M5PanelPage::draw(String pageIdentifier, M5EPD_Canvas *canvas)
 void M5PanelPage::draw(M5EPD_Canvas *canvas)
 {
     // clear
-    canvas->createCanvas(PANEL_WIDTH, PANEL_HEIGHT);
-    canvas->clear();
-    canvas->pushCanvas(NAV_WIDTH, 0, UPDATE_MODE_DU);
-    canvas->deleteCanvas();
+    M5.EPD.Clear(false);
 
     drawNavigation(canvas);
 
     // draw elements
     for (size_t i = 0; i < numElements; i++)
     {
-        drawElement(canvas, i);
+        drawElement(canvas, i, false);
     }
+
+    M5.EPD.UpdateFull(UPDATE_MODE_GLD16);
 }
 
-void M5PanelPage::drawElement(M5EPD_Canvas *canvas, int elementIndex)
+void M5PanelPage::drawElement(M5EPD_Canvas *canvas, int elementIndex, boolean updateImmediately)
 {
     int y = MARGIN + (elementIndex / ELEMENT_COLS) * ELEMENT_AREA_SIZE;
     int x = NAV_WIDTH + MARGIN + (elementIndex % ELEMENT_COLS) * ELEMENT_AREA_SIZE;
     elements[elementIndex]->draw(canvas, x, y, ELEMENT_AREA_SIZE);
+    if (updateImmediately)
+    {
+        M5.EPD.UpdateArea(x, y, ELEMENT_AREA_SIZE, ELEMENT_AREA_SIZE, UPDATE_MODE_DU);
+    }
 }
 
 void M5PanelPage::drawNavigation(M5EPD_Canvas *canvas)
@@ -189,7 +200,7 @@ void M5PanelPage::drawNavigation(M5EPD_Canvas *canvas)
     canvas->setTextWrap(true);
     canvas->setTextColor(15);
     canvas->println(title);
-    canvas->pushCanvas(MARGIN, MARGIN, UPDATE_MODE_GLR16);
+    canvas->pushCanvas(MARGIN, MARGIN, UPDATE_MODE_NONE);
     canvas->deleteCanvas();
 
     // navigation arrows
@@ -226,7 +237,7 @@ void M5PanelPage::drawNavigation(M5EPD_Canvas *canvas)
     (canvas->*previous_triangle)(arrowMargin, secondArrowTop, arrowRight, secondArrowTop, arrowMiddle, secondArrowBottom, 15);
     (canvas->*back_triangle)(backArrowLeft, backArrowLeftY, backArrowRight, backArrowTop + 5, backArrowRight, backArrowBottom - 5, 15);
 
-    canvas->pushCanvas(0, NAV_MARGIN_TOP_BOTTOM, UPDATE_MODE_DU);
+    canvas->pushCanvas(0, NAV_MARGIN_TOP_BOTTOM, UPDATE_MODE_NONE);
     canvas->deleteCanvas();
 }
 
@@ -298,7 +309,7 @@ String M5PanelPage::processElementTouch(uint16_t x, uint16_t y, M5EPD_Canvas *ca
         else
         {
             // react to touch graphically to give immediate feedback, since no navigation occurred
-            canvas->pushCanvas(highlightX + originX + NAV_WIDTH + MARGIN, highlightY + originY + MARGIN, UPDATE_MODE_GC16);
+            canvas->pushCanvas(highlightX + originX + NAV_WIDTH + MARGIN, highlightY + originY + MARGIN, UPDATE_MODE_DU);
             canvas->deleteCanvas();
         }
     }
@@ -355,13 +366,13 @@ String M5PanelPage::updateWidget(JsonObject json, String widgetId, String curren
         }
         // Serial.printf("found widget %s\n", widgetId.c_str());
         //  replace widget
-        elements[i] = new M5PanelUIElement(json, element);
-        element = elements[i]; // prevent further use of old element
-        if (currentPage == identifier)
+        boolean updated = elements[i]->update(json);
+
+        if (updated && currentPage == identifier)
         {
             // Serial.printf("redraw element %s\n", element->identifier.c_str());
             //  redraw widget
-            drawElement(canvas, i);
+            drawElement(canvas, i, true);
         }
         // widget to update was found on this page
         return identifier;
@@ -447,32 +458,11 @@ String getStateString(JsonObject json)
     return stateString;
 }
 
-M5PanelUIElement::M5PanelUIElement(JsonObject newJson, M5PanelUIElement *oldElement)
+M5PanelUIElement::M5PanelUIElement(JsonObject json)
 {
-    json = oldElement != NULL ? oldElement->json : newJson;
-    if (oldElement != NULL)
-    {
-        // update contents of old json (the elements to update are derived from the BasicUI update function)
-        String state = newJson["state"].isNull() ? newJson["item"]["state"].as<String>() : newJson["state"].as<String>();
-        if (!json["state"].isNull())
-        {
-            json["state"].set(state);
-        }
-        json["item"]["state"].set(state);
+    this->json = json;
 
-        json["label"].set(newJson["label"]);
-
-        json["visibility"].set(newJson["visibility"]);
-    }
-
-    title = parseWidgetLabel(json["label"].as<String>()); // TODO if empty -> item label?
-    icon = json["icon"].as<String>();
-
-    identifier = json["widgetId"].as<String>();
-
-    // TODO store commandDescription, mappings, pattern
-
-    state = getStateString(json);
+    updateFromCurrentJson();
 
     String typeString = json["type"];
     if (typeString == "Frame")
@@ -508,19 +498,6 @@ M5PanelUIElement::M5PanelUIElement(JsonObject newJson, M5PanelUIElement *oldElem
 
     Serial.println("Initialized element: " + title + " with icon: " + icon + " state: " + state + " type: " + typeString);
 
-    if (oldElement != NULL)
-    {
-        setParent(this, oldElement->parent);
-        setParent(oldElement, NULL);
-
-        detail = oldElement->detail;
-        oldElement->detail = NULL;
-
-        delete oldElement;
-
-        return;
-    }
-
     // frames can have direct widgets, other items always seem to have a "linked page"
     JsonArray widgets = json["widgets"];
     JsonObject linkedPageJson = json["linkedPage"];
@@ -533,8 +510,6 @@ M5PanelUIElement::M5PanelUIElement(JsonObject newJson, M5PanelUIElement *oldElem
     detail = new M5PanelPage(widgets.size() != 0 ? json : linkedPageJson);
     setParentForPageAndSuccessors(detail, this);
 }
-
-M5PanelUIElement::M5PanelUIElement(JsonObject json) : M5PanelUIElement(json, NULL) {}
 
 M5PanelUIElement::M5PanelUIElement(M5PanelUIElement *selection, JsonObject json, int i)
 {
@@ -557,6 +532,46 @@ M5PanelUIElement::~M5PanelUIElement()
     delete choices;
 }
 
+boolean M5PanelUIElement::updateFromCurrentJson()
+{
+    boolean changed = false;
+
+    String newTitle = parseWidgetLabel(json["label"].as<String>()); // TODO if empty -> item label?
+    changed |= newTitle == title;
+    title = newTitle;
+
+    String newIcon = json["icon"].as<String>();
+    changed |= newIcon == icon;
+    icon = newIcon;
+
+    String newIdentifier = json["widgetId"].as<String>();
+    changed |= newIdentifier == identifier;
+    identifier = newIdentifier;
+
+    String newState = getStateString(json);
+    changed |= newState == state;
+    state = newState;
+
+    return changed;
+}
+
+boolean M5PanelUIElement::update(JsonObject newJson)
+{
+    // update contents of old json (the elements to update are derived from the BasicUI update function)
+    String state = newJson["state"].isNull() ? newJson["item"]["state"].as<String>() : newJson["state"].as<String>();
+    if (!json["state"].isNull())
+    {
+        json["state"].set(state);
+    }
+    json["item"]["state"].set(state);
+
+    json["label"].set(newJson["label"]);
+
+    json["visibility"].set(newJson["visibility"]);
+
+    return updateFromCurrentJson();
+}
+
 void M5PanelUIElement::draw(M5EPD_Canvas *canvas, int x, int y, int size)
 {
     canvas->createCanvas(size - 2 * MARGIN, size - 2 * MARGIN);
@@ -572,7 +587,7 @@ void M5PanelUIElement::draw(M5EPD_Canvas *canvas, int x, int y, int size)
 
     drawStatusAndControlArea(canvas, elementSize);
 
-    canvas->pushCanvas(x + MARGIN, y + MARGIN, UPDATE_MODE_DU);
+    canvas->pushCanvas(x + MARGIN, y + MARGIN, UPDATE_MODE_NONE);
     canvas->deleteCanvas();
 }
 
@@ -792,7 +807,7 @@ String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canv
         case M5PanelElementType::Slider:
             canvas->createCanvas(elementSize / 2, ELEMENT_CONTROL_HEIGHT);
             *highlightY = elementSize - ELEMENT_CONTROL_HEIGHT + MARGIN;
-            canvas->fillRect(0, 0, elementSize / 2, ELEMENT_CONTROL_HEIGHT, 8);
+            canvas->fillRect(0, 0, elementSize / 2, ELEMENT_CONTROL_HEIGHT, 15);
             if (x < ELEMENT_AREA_SIZE / 2)
             {
                 // touched -
@@ -811,7 +826,7 @@ String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canv
             canvas->createCanvas(elementSize, ELEMENT_CONTROL_HEIGHT);
             *highlightY = elementSize - ELEMENT_CONTROL_HEIGHT + MARGIN;
             *highlightX = MARGIN;
-            canvas->fillRect(0, 0, elementSize, ELEMENT_CONTROL_HEIGHT, 8);
+            canvas->fillRect(0, 0, elementSize, ELEMENT_CONTROL_HEIGHT, 15);
             return "";
         default:
             break;

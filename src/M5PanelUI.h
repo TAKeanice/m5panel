@@ -32,7 +32,7 @@ private:
     M5PanelPage(JsonObject json, int pageIndex);
     M5PanelPage(M5PanelUIElement *selection, JsonObject json, int pageIndex);
 
-    void drawElement(M5EPD_Canvas *canvas, int elementIndex);
+    void drawElement(M5EPD_Canvas *canvas, int elementIndex, boolean updateImmediately);
     void drawNavigation(M5EPD_Canvas *canvas);
     String processNavigationTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
     String processElementTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
@@ -72,6 +72,7 @@ private:
     void drawTitle(M5EPD_Canvas *canvas, int size);
     void drawIcon(M5EPD_Canvas *canvas, int size);
     void drawStatusAndControlArea(M5EPD_Canvas *canvas, int size);
+    boolean updateFromCurrentJson();
 
 public:
     JsonObject json;
@@ -88,9 +89,9 @@ public:
     M5PanelUIElement(JsonObject json);
     /** create choice element */
     M5PanelUIElement(M5PanelUIElement *selection, JsonObject json, int i);
-    /** replace oldElement with new element, old element gets deleted */
-    M5PanelUIElement(JsonObject json, M5PanelUIElement *oldElement);
     ~M5PanelUIElement();
+
+    boolean update(JsonObject json);
 
     void draw(M5EPD_Canvas *canvas, int x, int y, int size);
 
