@@ -428,7 +428,6 @@ void checkSubscription()
     while (subscribeClient.available())
     {
         String subscriptionReceivedData = subscribeClient.readStringUntil('\n');
-        debug(F("checkSubscription"), "received subscription " + subscriptionReceivedData);
         int dataStart = subscriptionReceivedData.indexOf("data: ");
         if (dataStart > -1) // received data contains "data: "
         {

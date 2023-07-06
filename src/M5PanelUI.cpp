@@ -46,6 +46,18 @@ String parseWidgetLabel(String label)
     return parsedLabel;
 }
 
+void setParent(M5PanelUIElement *element, M5PanelPage *parent)
+{
+    Serial.printf("setting parent of %s to %s\n", element->identifier.c_str(), parent != NULL ? parent->identifier.c_str() : "NULL");
+    element->parent = parent;
+}
+
+void setParent(M5PanelPage *page, M5PanelUIElement *parent)
+{
+    Serial.printf("setting parent of %s to %s\n", page->identifier.c_str(), parent != NULL ? parent->identifier.c_str() : "NULL");
+    page->parent = parent;
+}
+
 // M5PanelPage
 
 M5PanelPage::M5PanelPage(JsonObject json) : M5PanelPage(json, 0) {}
@@ -72,7 +84,7 @@ M5PanelPage::M5PanelPage(JsonObject json, int pageIndex)
     {
         JsonObject elementJson = widgets[pageOffset + i];
         elements[i] = new M5PanelUIElement(elementJson);
-        elements[i]->parent = this;
+        setParent(elements[i], this);
     }
 
     // initialize additional pages if necessary
@@ -100,8 +112,9 @@ M5PanelPage::M5PanelPage(M5PanelUIElement *selection, JsonObject json, int pageI
     for (size_t i = 0; i < numElements; i++)
     {
         elements[i] = new M5PanelUIElement(selection, json, pageOffset + i);
-        elements[i]->parent = this;
+        setParent(elements[i], this);
     }
+
     if (choices.size() - pageOffset <= MAX_ELEMENTS)
     {
         // no additional pages needed
@@ -114,7 +127,7 @@ M5PanelPage::M5PanelPage(M5PanelUIElement *selection, JsonObject json, int pageI
 
 M5PanelPage::~M5PanelPage()
 {
-    Serial.print("delete page: " + title);
+    Serial.printf("delete page %s (%s)\n", title.c_str(), identifier.c_str());
     for (size_t i = 0; i < MAX_ELEMENTS; i++)
     {
         delete elements[i];
@@ -332,7 +345,7 @@ String M5PanelPage::processTouch(String currentElement, uint16_t x, uint16_t y, 
 
 String M5PanelPage::updateWidget(JsonObject json, String widgetId, String currentPage, M5EPD_Canvas *canvas)
 {
-    Serial.printf("Updating on page %s\n", identifier.c_str());
+    // Serial.printf("Updating on page %s\n", identifier.c_str());
     for (size_t i = 0; i < numElements; i++)
     {
         M5PanelUIElement *element = elements[i];
@@ -340,14 +353,14 @@ String M5PanelPage::updateWidget(JsonObject json, String widgetId, String curren
         {
             continue;
         }
-        Serial.printf("found widget %s\n", widgetId.c_str());
-        // replace widget
+        // Serial.printf("found widget %s\n", widgetId.c_str());
+        //  replace widget
         elements[i] = new M5PanelUIElement(json, element);
         element = elements[i]; // prevent further use of old element
         if (currentPage == identifier)
         {
-            Serial.printf("redraw element %s\n", element->identifier.c_str());
-            // redraw widget
+            // Serial.printf("redraw element %s\n", element->identifier.c_str());
+            //  redraw widget
             drawElement(canvas, i);
         }
         // widget to update was found on this page
@@ -361,7 +374,7 @@ String M5PanelPage::updateWidget(JsonObject json, String widgetId, String curren
         // forward update command
         if (element->detail != NULL)
         {
-            Serial.printf("Updating element %s detail\n", element->identifier.c_str());
+            // Serial.printf("Updating element %s detail\n", element->identifier.c_str());
             String foundOnPageId = element->detail->updateWidget(json, widgetId, currentPage, canvas);
             if (foundOnPageId != "")
             {
@@ -388,7 +401,7 @@ void setParentForPageAndSuccessors(M5PanelPage *firstChild, M5PanelUIElement *pa
     M5PanelPage *page = firstChild;
     while (page != NULL)
     {
-        page->parent = parent;
+        setParent(page, parent);
         page = page->next;
     }
 }
@@ -497,8 +510,8 @@ M5PanelUIElement::M5PanelUIElement(JsonObject newJson, M5PanelUIElement *oldElem
 
     if (oldElement != NULL)
     {
-        parent = oldElement->parent;
-        oldElement->parent = NULL;
+        setParent(this, oldElement->parent);
+        setParent(oldElement, NULL);
 
         detail = oldElement->detail;
         oldElement->detail = NULL;
@@ -539,7 +552,7 @@ M5PanelUIElement::M5PanelUIElement(M5PanelUIElement *selection, JsonObject json,
 
 M5PanelUIElement::~M5PanelUIElement()
 {
-    Serial.println("delete element: " + title);
+    Serial.printf("delete element %s (%s)\n", title.c_str(), identifier.c_str());
     delete detail;
     delete choices;
 }
