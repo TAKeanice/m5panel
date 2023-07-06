@@ -219,6 +219,7 @@ void M5PanelPage::drawNavigation(M5EPD_Canvas *canvas)
 
 String navigate(M5PanelPage *navigationTarget, M5EPD_Canvas *canvas)
 {
+    Serial.printf("Navigating to %s (%s)\n", navigationTarget->title.c_str(), navigationTarget->identifier.c_str());
     navigationTarget->draw(canvas);
     return navigationTarget->identifier;
 }
@@ -270,9 +271,13 @@ String M5PanelPage::processElementTouch(uint16_t x, uint16_t y, M5EPD_Canvas *ca
     if (elementIndex < numElements)
     {
         int highlightX, highlightY;
-        void (*callback)(M5PanelUIElement *);
+        void (*callback)(M5PanelUIElement *) = NULL;
         M5PanelUIElement *element = elements[elementIndex];
         String newCurrentElement = element->processTouch(x - originX, y - originY, canvas, &highlightX, &highlightY, &callback);
+        if (callback != NULL)
+        {
+            callback(element);
+        }
         if (newCurrentElement != "")
         {
             return newCurrentElement;
@@ -282,10 +287,6 @@ String M5PanelPage::processElementTouch(uint16_t x, uint16_t y, M5EPD_Canvas *ca
             // react to touch graphically to give immediate feedback, since no navigation occurred
             canvas->pushCanvas(highlightX + originX + NAV_WIDTH + MARGIN, highlightY + originY + MARGIN, UPDATE_MODE_GC16);
             canvas->deleteCanvas();
-            if (callback != NULL)
-            {
-                callback(element);
-            }
         }
     }
     return identifier;
@@ -719,17 +720,21 @@ void sendSwitchTouch(M5PanelUIElement *touchedElement)
     JsonArray mappings = json["mappings"];
     if (mappings.isNull() || mappings.size() == 0)
     {
+        mappings = json["item"]["commandDescription"]["commandOptions"];
+    }
+
+    if (mappings.isNull() || mappings.size() == 0)
+    {
         newState = touchedElement->state == "ON" ? "OFF" : "ON";
     }
     else
     {
-        JsonArray mappings = json["mappings"];
         size_t nextStateIndex;
         // find next state in mapping list
         for (size_t i = 0; i < mappings.size(); i++)
         {
             JsonObject mapping = mappings[i];
-            String jsonState = json["state"];
+            String jsonState = json["item"]["state"];
             if (mapping["command"] == jsonState)
             {
                 nextStateIndex = (i + 1) % mappings.size();
@@ -757,7 +762,6 @@ String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canv
 
         if (type == M5PanelElementType::Choice)
         {
-            // TODO send control action to OpenHab
             // navigate back to parent page (parent of parent element of parent page)
             *callback = &sendChoiceTouch;
             return navigate(parent->parent->parent, canvas);

@@ -109,14 +109,16 @@ String getCurrentPageId()
     int choicesIdx = currentPage.lastIndexOf("_choices_");
     if (choicesIdx > 0)
     {
-        cutoffIdx = choicesIdx;
+        return currentPage.substring(0, choicesIdx);
     }
+
     int pageSeparatorIdx = currentPage.lastIndexOf("_");
     if (pageSeparatorIdx > 0)
     {
-        cutoffIdx = pageSeparatorIdx;
+        return currentPage.substring(0, pageSeparatorIdx);
     }
-    return currentPage.substring(0, cutoffIdx);
+
+    return OPENHAB_SITEMAP;
 }
 
 void updateAndSubscribeCurrentPage()
@@ -127,12 +129,10 @@ void updateAndSubscribeCurrentPage()
     httpRequest(restUrl + "/sitemaps/" + OPENHAB_SITEMAP + "/" + page + "?subscriptionid=" + subscriptionId, pageUpdate);
     DynamicJsonDocument jsonData(30000);
     deserializeJson(jsonData, pageUpdate);
-    debug(F("updateAndSubscribeCurrentPage"), pageUpdate);
     JsonArray widgets = jsonData["widgets"];
     for (size_t i = 0; i < widgets.size(); i++)
     {
         String widgetId = widgets[i]["widgetId"].as<String>();
-        debug(F("updateAndSubscribeCurrentPage"), "update widget with id " + widgetId);
         rootPage->updateWidget(widgets[i], widgetId, currentPage, &canvas);
     }
 
