@@ -28,7 +28,6 @@ M5EPD_Canvas canvas(&M5.EPD);
 WiFiClient subscribeClient;
 
 String restUrl = "http://" + String(OPENHAB_HOST) + String(":") + String(OPENHAB_PORT) + String("/rest");
-String iconURL = "http://" + String(OPENHAB_HOST) + String(":") + String(OPENHAB_PORT) + String("/icon");
 String subscriptionId = "";
 
 DynamicJsonDocument jsonDoc(60000); // size to be checked

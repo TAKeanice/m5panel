@@ -96,5 +96,5 @@ public:
     void draw(M5EPD_Canvas *canvas, int x, int y, int size);
 
     String forwardTouch(String currentElement, uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
-    String processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas, int *highlightX, int *highlightY, void (**callback)(M5PanelUIElement *));
+    M5PanelPage *processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas, int *highlightX, int *highlightY, boolean (**callback)(M5PanelUIElement *));
 };

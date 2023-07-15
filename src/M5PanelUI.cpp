@@ -1,5 +1,7 @@
 #include "M5PanelUI.h"
 #include <ArduinoJson.h>
+#include <LittleFS.h>
+#include "defs.h"
 
 #include <HTTPClient.h>
 
@@ -22,7 +24,7 @@
 #define NAV_WIDTH 150
 #define NAV_MARGIN_TOP_BOTTOM 100
 
-#define ELEMENT_CONTROL_HEIGHT 80
+#define ELEMENT_CONTROL_HEIGHT 70
 #define FONT_SIZE_ELEMENT_TITLE 32
 
 #define LINE_THICKNESS 3
@@ -295,22 +297,24 @@ String M5PanelPage::processElementTouch(uint16_t x, uint16_t y, M5EPD_Canvas *ca
     if (elementIndex < numElements)
     {
         int highlightX, highlightY;
-        void (*callback)(M5PanelUIElement *) = NULL;
+        boolean (*callback)(M5PanelUIElement *) = NULL;
         M5PanelUIElement *element = elements[elementIndex];
-        String newCurrentElement = element->processTouch(x - originX, y - originY, canvas, &highlightX, &highlightY, &callback);
+        M5PanelPage *navigationTarget = element->processTouch(x - originX, y - originY, canvas, &highlightX, &highlightY, &callback);
+        // react to touch graphically to give immediate feedback, since no navigation occurred
+        canvas->pushCanvas(highlightX + originX + NAV_WIDTH + MARGIN, highlightY + originY + MARGIN, UPDATE_MODE_DU);
+        canvas->deleteCanvas();
         if (callback != NULL)
         {
-            callback(element);
+            boolean changed = callback(element);
+            if (!changed)
+            {
+                // redraw to get rid of highlight
+                drawElement(canvas, elementIndex, true);
+            }
         }
-        if (newCurrentElement != "")
+        if (navigationTarget != NULL)
         {
-            return newCurrentElement;
-        }
-        else
-        {
-            // react to touch graphically to give immediate feedback, since no navigation occurred
-            canvas->pushCanvas(highlightX + originX + NAV_WIDTH + MARGIN, highlightY + originY + MARGIN, UPDATE_MODE_DU);
-            canvas->deleteCanvas();
+            return navigate(navigationTarget, canvas);
         }
     }
     return identifier;
@@ -558,12 +562,9 @@ boolean M5PanelUIElement::updateFromCurrentJson()
 boolean M5PanelUIElement::update(JsonObject newJson)
 {
     // update contents of old json (the elements to update are derived from the BasicUI update function)
-    String state = newJson["state"].isNull() ? newJson["item"]["state"].as<String>() : newJson["state"].as<String>();
-    if (!json["state"].isNull())
-    {
-        json["state"].set(state);
-    }
-    json["item"]["state"].set(state);
+    json["state"].set(newJson["state"]);
+
+    json["item"]["state"].set(newJson["item"]["state"]);
 
     json["label"].set(newJson["label"]);
 
@@ -615,16 +616,18 @@ void M5PanelUIElement::drawTitle(M5EPD_Canvas *canvas, int elementSize)
     int elementCenter = elementSize / 2;
     int titleY;
     uint8_t alignment;
+
+    boolean titleCanBeVerticallyCentered = icon == "";
+
     switch (type)
     {
     case M5PanelElementType::Choice:
     case M5PanelElementType::Frame:
-        // TODO allow multiple lines in Frames
-        titleY = elementCenter;
-        alignment = MC_DATUM;
+        titleY = titleCanBeVerticallyCentered ? elementCenter : MARGIN * 2;
+        alignment = titleCanBeVerticallyCentered ? MC_DATUM : TC_DATUM;
         break;
     default:
-        titleY = MARGIN;
+        titleY = MARGIN * 2;
         alignment = TC_DATUM;
         break;
     }
@@ -634,20 +637,56 @@ void M5PanelUIElement::drawTitle(M5EPD_Canvas *canvas, int elementSize)
     canvas->drawString(title, elementCenter, titleY);
 }
 
+String getLocalIconFile(String icon, String state)
+{
+    String iconFile = "/icons/" + icon + "-" + state + ".png"; // Try to find dynamic icon ...
+    iconFile.toLowerCase();
+    if (!LittleFS.exists(iconFile))
+    {
+        iconFile = "/icons/" + icon + ".png"; // else try to find non dynamic icon
+        iconFile.toLowerCase();
+        if (!LittleFS.exists(iconFile))
+        {
+            iconFile = "";
+        }
+    }
+    return iconFile;
+}
+
 void M5PanelUIElement::drawIcon(M5EPD_Canvas *canvas, int size)
 {
-    // TODO
+    if (icon == "")
+    {
+        return;
+    }
+
+    int iconSize = 96;
+    int yOffset = iconSize / 2;
+    String iconFile = getLocalIconFile(icon, state);
+    if (iconFile != "")
+    {
+        canvas->drawPngFile(LittleFS, iconFile.c_str(), size / 2 - iconSize / 2, size / 2 - yOffset, 0, 0, 0, 0, 1);
+    }
+    else
+    {
+        icon = ""; // draw as if there was no icon defined
+    }
 }
 
 void M5PanelUIElement::drawStatusAndControlArea(M5EPD_Canvas *canvas, int elementSize)
 {
+    boolean statusVerticallyCentered = icon == "" && type != M5PanelElementType::Choice && type != M5PanelElementType::Frame;
+
     int elementCenter = elementSize / 2;
     int controlY = elementSize - ELEMENT_CONTROL_HEIGHT;
-    int controlYCenter = controlY + ELEMENT_CONTROL_HEIGHT / 2;
+    int controlYCenter = elementSize - ELEMENT_CONTROL_HEIGHT / 2;
+
+    int valueYCenter = statusVerticallyCentered ? elementSize / 2 : controlYCenter;
 
     // clear previous status content
-    canvas->fillRect(MARGIN, controlY + MARGIN, elementSize - 2 * MARGIN, ELEMENT_CONTROL_HEIGHT - 2 * MARGIN, 0);
+    canvas->fillRect(MARGIN, valueYCenter - ELEMENT_CONTROL_HEIGHT / 2 + MARGIN, elementSize - 2 * MARGIN, ELEMENT_CONTROL_HEIGHT - 2 * MARGIN, 0);
 
+    // control symbols
     switch (type)
     {
     case M5PanelElementType::Slider:
@@ -658,17 +697,35 @@ void M5PanelUIElement::drawStatusAndControlArea(M5EPD_Canvas *canvas, int elemen
         canvas->drawString("-", MARGIN, controlYCenter);
         canvas->setTextDatum(MR_DATUM);
         canvas->drawString("+", elementSize - MARGIN, controlYCenter);
-        // also draw control area --> no break
+        break;
+    case M5PanelElementType::Selection:
+        // draw dots to indicate selection
+        canvas->fillCircle(MARGIN + 3, controlYCenter - MARGIN, 3, 15);
+        canvas->fillCircle(MARGIN + 3, controlYCenter + MARGIN, 3, 15);
+        canvas->fillCircle(elementSize - MARGIN - 3, controlYCenter - MARGIN, 3, 15);
+        canvas->fillCircle(elementSize - MARGIN - 3, controlYCenter + MARGIN, 3, 15);
+        break;
+    case M5PanelElementType::Switch:
+        // draw divider to indicate switch
+        canvas->drawLine(0, controlY, elementSize - LINE_THICKNESS, controlY, LINE_THICKNESS, 15);
+        break;
+    default:
+        break;
+    }
+
+    // status
+
+    switch (type)
+    {
+    case M5PanelElementType::Slider:
+    case M5PanelElementType::Setpoint:
     case M5PanelElementType::Selection:
     case M5PanelElementType::Switch:
-        // draw divider
-        canvas->drawLine(0, controlY, elementSize - LINE_THICKNESS, controlY, LINE_THICKNESS, 15);
-        // also draw text --> no break
     case M5PanelElementType::Text:
         // draw status
         canvas->setTextSize(FONT_SIZE_LABEL);
         canvas->setTextDatum(MC_DATUM);
-        canvas->drawString(state, elementCenter, controlYCenter);
+        canvas->drawString(state, elementCenter, valueYCenter);
         break;
     default:
         break;
@@ -710,7 +767,7 @@ void postValue(String link, String newState)
     httpPost.end();
 }
 
-void sendChoiceTouch(M5PanelUIElement *touchedElement)
+boolean sendChoiceTouch(M5PanelUIElement *touchedElement)
 {
     Serial.println("send touch on choice");
     JsonObject json = touchedElement->json;
@@ -723,22 +780,56 @@ void sendChoiceTouch(M5PanelUIElement *touchedElement)
         if (choice["label"] == touchedChoice)
         {
             postValue(json["item"]["link"], choice["command"]);
-            return;
+            return true;
         }
     }
+    return true;
 }
 
-void sendPlusTouch(M5PanelUIElement *touchedElement)
+int getStep(JsonObject widgetJson, JsonObject stateDescription)
+{
+    return !widgetJson["step"].isNull()
+               ? widgetJson["step"].as<String>().toInt()
+               : (!stateDescription["step"].isNull()
+                      ? stateDescription["step"].as<String>().toInt()
+                      : 10);
+}
+
+boolean sendPlusTouch(M5PanelUIElement *touchedElement)
 {
     Serial.println("send touch on plus");
+    JsonObject json = touchedElement->json;
+    int currentState = json["item"]["state"].as<String>().toInt();
+    JsonObject stateDescription = json["item"]["stateDescription"];
+    int maxValue = !json["maxValue"].isNull()
+                       ? json["maxValue"].as<String>().toInt()
+                       : (!stateDescription["minimum"].isNull()
+                              ? stateDescription["maximum"].as<String>().toInt()
+                              : 100);
+    int step = getStep(json, stateDescription);
+    int newValue = min(maxValue, currentState + step);
+    postValue(json["item"]["link"], String(newValue));
+    return maxValue != currentState;
 }
 
-void sendMinusTouch(M5PanelUIElement *touchedElement)
+boolean sendMinusTouch(M5PanelUIElement *touchedElement)
 {
     Serial.println("send touch on minus");
+    JsonObject json = touchedElement->json;
+    int currentState = json["item"]["state"].as<String>().toInt();
+    JsonObject stateDescription = json["item"]["stateDescription"];
+    int minValue = !json["minValue"].isNull()
+                       ? json["minValue"].as<String>().toInt()
+                       : (!stateDescription["minimum"].isNull()
+                              ? stateDescription["minimum"].as<String>().toInt()
+                              : 0);
+    int step = getStep(json, stateDescription);
+    int newValue = max(minValue, currentState - step);
+    postValue(json["item"]["link"], String(newValue));
+    return minValue != currentState;
 }
 
-void sendSwitchTouch(M5PanelUIElement *touchedElement)
+boolean sendSwitchTouch(M5PanelUIElement *touchedElement)
 {
     Serial.println("send touch on switch");
     JsonObject json = touchedElement->json;
@@ -758,12 +849,12 @@ void sendSwitchTouch(M5PanelUIElement *touchedElement)
     else
     {
         size_t nextStateIndex;
+        String itemState = json["item"]["state"];
         // find next state in mapping list
         for (size_t i = 0; i < mappings.size(); i++)
         {
             JsonObject mapping = mappings[i];
-            String jsonState = json["item"]["state"];
-            if (mapping["command"] == jsonState)
+            if (mapping["command"] == itemState)
             {
                 nextStateIndex = (i + 1) % mappings.size();
                 break;
@@ -771,38 +862,59 @@ void sendSwitchTouch(M5PanelUIElement *touchedElement)
         }
         // implicitly uses first state when current state not found
         newState = mappings[nextStateIndex]["command"].as<String>();
+        Serial.printf("Current state: %s, new state: %s", itemState, newState);
     }
     postValue(json["item"]["link"], newState);
+    return true;
 }
 
-String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas, int *highlightX, int *highlightY, void (**callback)(M5PanelUIElement *))
+M5PanelPage *M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas, int *highlightX, int *highlightY, boolean (**callback)(M5PanelUIElement *))
 {
     // process touch on title / icon or control area for interaction
     Serial.printf("Touched on item %s (title: %s) with coordinates (%d,%d) (relative to element frame)\n", identifier.c_str(), title.c_str(), x, y);
 
-    if (y < ELEMENT_AREA_SIZE - ELEMENT_CONTROL_HEIGHT - MARGIN || type == M5PanelElementType::Frame || type == M5PanelElementType::Choice || type == M5PanelElementType::Text)
+    M5PanelPage *navigationTarget = NULL;
+
+    int elementSize = ELEMENT_AREA_SIZE - 2 * MARGIN;
+
+    if (type == M5PanelElementType::Frame || type == M5PanelElementType::Choice || type == M5PanelElementType::Text)
     {
         // touched in area for navigation
         if (detail != NULL)
         {
-            return navigate(detail, canvas);
+            navigationTarget = detail;
         }
-
-        if (type == M5PanelElementType::Choice)
+        else if (type == M5PanelElementType::Choice)
         {
             // navigate back to parent page (parent of parent element of parent page)
             *callback = &sendChoiceTouch;
-            return navigate(parent->parent->parent, canvas);
+            navigationTarget = parent->parent->parent;
         }
+        if (navigationTarget != NULL)
+        {
+            canvas->createCanvas(elementSize, elementSize);
+            canvas->fillRect(0, 0, elementSize, elementSize, 15);
+        }
+        else
+        {
+            // we have to create a canvas to be drawn by the caller
+            canvas->createCanvas(1, 1);
+        }
+        *highlightX = MARGIN;
+        *highlightY = MARGIN;
     }
     else
     {
-        int elementSize = ELEMENT_AREA_SIZE - 2 * MARGIN;
         // touched in area for state / control
         switch (type)
         {
         case M5PanelElementType::Selection:
-            return navigate(choices, canvas);
+            canvas->createCanvas(elementSize, ELEMENT_CONTROL_HEIGHT);
+            *highlightY = elementSize - ELEMENT_CONTROL_HEIGHT + MARGIN;
+            *highlightX = MARGIN;
+            canvas->fillRect(0, 0, elementSize, ELEMENT_CONTROL_HEIGHT, 15);
+            navigationTarget = choices;
+            break;
         case M5PanelElementType::Setpoint:
         case M5PanelElementType::Slider:
             canvas->createCanvas(elementSize / 2, ELEMENT_CONTROL_HEIGHT);
@@ -819,7 +931,7 @@ String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canv
                 *callback = &sendPlusTouch;
                 *highlightX = elementSize / 2 + MARGIN;
             }
-            return "";
+            break;
         case M5PanelElementType::Switch:
             // touched switch
             *callback = &sendSwitchTouch;
@@ -827,11 +939,11 @@ String M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canv
             *highlightY = elementSize - ELEMENT_CONTROL_HEIGHT + MARGIN;
             *highlightX = MARGIN;
             canvas->fillRect(0, 0, elementSize, ELEMENT_CONTROL_HEIGHT, 15);
-            return "";
+            break;
         default:
             break;
         }
     }
 
-    return "";
+    return navigationTarget;
 }
