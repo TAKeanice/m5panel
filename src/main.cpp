@@ -240,6 +240,7 @@ void parseSubscriptionData(String jsonDataStr)
         {
             debug(F("parseSubscriptionData"), F("Sitemap changed, reloading"));
             updateSiteMap();
+            updateAndSubscribeCurrentPage();
         }
     }
     jsonData.clear();
