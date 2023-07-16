@@ -243,24 +243,24 @@ void M5PanelPage::drawNavigation(M5EPD_Canvas *canvas)
     canvas->deleteCanvas();
 }
 
-String navigate(M5PanelPage *navigationTarget, M5EPD_Canvas *canvas)
+M5PanelPage *navigate(M5PanelPage *navigationTarget, M5EPD_Canvas *canvas)
 {
     Serial.printf("Navigating to %s (%s)\n", navigationTarget->title.c_str(), navigationTarget->identifier.c_str());
-    navigationTarget->draw(canvas);
-    return navigationTarget->identifier;
+    return navigationTarget;
 }
 
-String M5PanelPage::processNavigationTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
+M5PanelPage *M5PanelPage::processNavigationTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
 {
     Serial.println("Touched navigation area");
     // touch within navigation area
     int arrowAreaHeight = PANEL_HEIGHT - 2 * NAV_MARGIN_TOP_BOTTOM;
+    int singleArrowHeight = arrowAreaHeight / 3;
 
     if (y > arrowAreaHeight)
     {
-        return identifier; // not touched on arrows
+        return this; // not touched on arrows
     }
-    int arrow = y / (arrowAreaHeight / 3);
+    int arrow = y / singleArrowHeight;
     M5PanelPage *toDraw;
     switch (arrow)
     {
@@ -279,15 +279,21 @@ String M5PanelPage::processNavigationTouch(uint16_t x, uint16_t y, M5EPD_Canvas 
 
     if (toDraw == NULL)
     {
-        return identifier;
+        return this;
     }
     else
     {
+        // highlight touched arrow
+        canvas->createCanvas(NAV_WIDTH - 4 * MARGIN, singleArrowHeight);
+        canvas->fillCanvas(15);
+        canvas->pushCanvas(2 * MARGIN, NAV_MARGIN_TOP_BOTTOM + singleArrowHeight * arrow, UPDATE_MODE_DU);
+        canvas->deleteCanvas();
+
         return navigate(toDraw, canvas);
     }
 }
 
-String M5PanelPage::processElementTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
+M5PanelPage *M5PanelPage::processElementTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
 {
     int elementColumn = x / ELEMENT_AREA_SIZE;
     int elementRow = y / ELEMENT_AREA_SIZE;
@@ -317,10 +323,10 @@ String M5PanelPage::processElementTouch(uint16_t x, uint16_t y, M5EPD_Canvas *ca
             return navigate(navigationTarget, canvas);
         }
     }
-    return identifier;
+    return this;
 }
 
-String M5PanelPage::processTouch(String currentElement, uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
+M5PanelPage *M5PanelPage::processTouch(String currentElement, uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
 {
     if (currentElement == identifier)
     {
@@ -336,12 +342,12 @@ String M5PanelPage::processTouch(String currentElement, uint16_t x, uint16_t y, 
     else
     {
         // iterate through next pages and let them process the touch
-        String newCurrentElement = "";
+        M5PanelPage *newCurrentElement = NULL;
         if (next != NULL)
         {
             newCurrentElement = next->processTouch(currentElement, x, y, canvas);
         }
-        if (newCurrentElement != "")
+        if (newCurrentElement != NULL)
         {
             return newCurrentElement;
         }
@@ -349,16 +355,16 @@ String M5PanelPage::processTouch(String currentElement, uint16_t x, uint16_t y, 
         for (size_t i = 0; i < numElements; i++)
         {
             newCurrentElement = elements[i]->forwardTouch(currentElement, x, y, canvas);
-            if (newCurrentElement != "")
+            if (newCurrentElement != NULL)
             {
                 return newCurrentElement;
             }
         }
-        return "";
+        return NULL;
     }
 }
 
-String M5PanelPage::updateWidget(JsonObject json, String widgetId, String currentPage, M5EPD_Canvas *canvas)
+M5PanelPage *M5PanelPage::updateWidget(JsonObject json, String widgetId, String currentPage, M5EPD_Canvas *canvas)
 {
     // Serial.printf("Updating on page %s\n", identifier.c_str());
     for (size_t i = 0; i < numElements; i++)
@@ -379,7 +385,7 @@ String M5PanelPage::updateWidget(JsonObject json, String widgetId, String curren
             drawElement(canvas, i, true);
         }
         // widget to update was found on this page
-        return identifier;
+        return this;
     }
 
     // search subpages for element to be updated
@@ -390,10 +396,10 @@ String M5PanelPage::updateWidget(JsonObject json, String widgetId, String curren
         if (element->detail != NULL)
         {
             // Serial.printf("Updating element %s detail\n", element->identifier.c_str());
-            String foundOnPageId = element->detail->updateWidget(json, widgetId, currentPage, canvas);
-            if (foundOnPageId != "")
+            M5PanelPage *foundOnPage = element->detail->updateWidget(json, widgetId, currentPage, canvas);
+            if (foundOnPage != NULL)
             {
-                return foundOnPageId;
+                return foundOnPage;
             }
         }
     }
@@ -406,7 +412,16 @@ String M5PanelPage::updateWidget(JsonObject json, String widgetId, String curren
     }
 
     // not found at all in this branch
-    return "";
+    return NULL;
+}
+
+void M5PanelPage::updateAllWidgets(DynamicJsonDocument json)
+{
+    title = json["title"].as<String>();
+    for (size_t i = 0; i < numElements; i++)
+    {
+        elements[i]->update(json["widgets"][i]);
+    }
 }
 
 // M5PanelUIElement
@@ -732,12 +747,12 @@ void M5PanelUIElement::drawStatusAndControlArea(M5EPD_Canvas *canvas, int elemen
     }
 }
 
-String M5PanelUIElement::forwardTouch(String currentElement, uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
+M5PanelPage *M5PanelUIElement::forwardTouch(String currentElement, uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
 {
     if (choices != NULL)
     {
-        String newCurrentElement = choices->processTouch(currentElement, x, y, canvas);
-        if (newCurrentElement != "")
+        M5PanelPage *newCurrentElement = choices->processTouch(currentElement, x, y, canvas);
+        if (newCurrentElement != NULL)
         {
             return newCurrentElement;
         }
@@ -745,15 +760,15 @@ String M5PanelUIElement::forwardTouch(String currentElement, uint16_t x, uint16_
 
     if (detail != NULL)
     {
-        String newCurrentElement = detail->processTouch(currentElement, x, y, canvas);
-        if (newCurrentElement != "")
+        M5PanelPage *newCurrentElement = detail->processTouch(currentElement, x, y, canvas);
+        if (newCurrentElement != NULL)
         {
             return newCurrentElement;
         }
     }
 
     // touch does not concern choices nor detail page of this item
-    return "";
+    return NULL;
 }
 
 void postValue(String link, String newState)

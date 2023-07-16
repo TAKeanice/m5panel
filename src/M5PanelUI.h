@@ -34,8 +34,8 @@ private:
 
     void drawElement(M5EPD_Canvas *canvas, int elementIndex, boolean updateImmediately);
     void drawNavigation(M5EPD_Canvas *canvas);
-    String processNavigationTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
-    String processElementTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
+    M5PanelPage *processNavigationTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
+    M5PanelPage *processElementTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
 
 public:
     String title;
@@ -57,12 +57,14 @@ public:
     /**
      * react to touch in a certain place and return the new currentElement
      */
-    String processTouch(String currentElement, uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
+    M5PanelPage *processTouch(String currentElement, uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
 
     /**
      * update widget and report the page where this was found
      */
-    String updateWidget(JsonObject json, String widgetId, String currentPage, M5EPD_Canvas *canvas);
+    M5PanelPage *updateWidget(JsonObject json, String widgetId, String currentPage, M5EPD_Canvas *canvas);
+
+    void updateAllWidgets(DynamicJsonDocument json);
 };
 
 class M5PanelUIElement
@@ -95,6 +97,6 @@ public:
 
     void draw(M5EPD_Canvas *canvas, int x, int y, int size);
 
-    String forwardTouch(String currentElement, uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
+    M5PanelPage *forwardTouch(String currentElement, uint16_t x, uint16_t y, M5EPD_Canvas *canvas);
     M5PanelPage *processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas, int *highlightX, int *highlightY, boolean (**callback)(M5PanelUIElement *));
 };

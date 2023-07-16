@@ -102,32 +102,51 @@ bool httpRequest(String &url, String &response)
     return true;
 }
 
-String getCurrentPageId()
+String getSitemapPageId(String page)
 {
-    int cutoffIdx = currentPage.length() - 1;
-    int choicesIdx = currentPage.lastIndexOf("_choices_");
+    int cutoffIdx = page.length() - 1;
+    int choicesIdx = page.lastIndexOf("_choices_");
     if (choicesIdx > 0)
     {
-        return currentPage.substring(0, choicesIdx);
+        return page.substring(0, choicesIdx);
     }
 
-    int pageSeparatorIdx = currentPage.lastIndexOf("_");
+    int pageSeparatorIdx = page.lastIndexOf("_");
     if (pageSeparatorIdx > 0)
     {
-        return currentPage.substring(0, pageSeparatorIdx);
+        return page.substring(0, pageSeparatorIdx);
     }
 
     return OPENHAB_SITEMAP;
 }
 
-void updateAndSubscribeCurrentPage()
+String getCurrentSitemapPageId()
 {
-    String page = getCurrentPageId();
+    return getSitemapPageId(currentPage);
+}
 
+DynamicJsonDocument subscribePage(String pageId)
+{
+    String sitemapPageId = getSitemapPageId(pageId);
     String pageUpdate;
-    httpRequest(restUrl + "/sitemaps/" + OPENHAB_SITEMAP + "/" + page + "?subscriptionid=" + subscriptionId, pageUpdate);
+    httpRequest(restUrl + "/sitemaps/" + OPENHAB_SITEMAP + "/" + sitemapPageId + "?subscriptionid=" + subscriptionId, pageUpdate);
+
     DynamicJsonDocument jsonData(30000);
     deserializeJson(jsonData, pageUpdate);
+
+    return jsonData;
+}
+
+void updateAndSubscribePage(M5PanelPage *page)
+{
+    DynamicJsonDocument jsonData = subscribePage(page->identifier);
+    page->updateAllWidgets(jsonData);
+}
+
+void updateAndSubscribeCurrentPage()
+{
+    DynamicJsonDocument jsonData = subscribePage(currentPage);
+
     JsonArray widgets = jsonData["widgets"];
     for (size_t i = 0; i < widgets.size(); i++)
     {
@@ -170,7 +189,7 @@ bool subscribe()
     subscriptionId = baseUrl.substring(baseUrl.lastIndexOf("/") + 1);
 
     String subscriptionURL = baseUrl.substring(baseUrl.indexOf("/rest/sitemaps"));
-    String parametrizedUrl = subscriptionURL + "?sitemap=" + OPENHAB_SITEMAP + "&pageid=" + getCurrentPageId();
+    String parametrizedUrl = subscriptionURL + "?sitemap=" + OPENHAB_SITEMAP + "&pageid=" + getCurrentSitemapPageId();
     debug(F("subscribe"), "subscriptionURL: " + parametrizedUrl);
     subscribeClient.connect(OPENHAB_HOST, OPENHAB_PORT);
     subscribeClient.println("GET " + parametrizedUrl + " HTTP/1.1");
@@ -454,12 +473,17 @@ void checkTouch()
                 interactionStartMillis = loopStartMillis;
 
                 // process touch on finger lifting
-                String newPage = rootPage->processTouch(currentPage, _last_pos_x, _last_pos_y, &canvas);
-                if (currentPage != newPage)
+                M5PanelPage *newPage = rootPage->processTouch(currentPage, _last_pos_x, _last_pos_y, &canvas);
+                if (currentPage != newPage->identifier)
                 {
-                    currentPage = newPage;
+                    currentPage = newPage->identifier;
                     debug(F("checkTouch"), "new current page after touch: " + currentPage);
-                    updateAndSubscribeCurrentPage();
+                    int choicesIdx = newPage->identifier.lastIndexOf("_choices_");
+                    if (choicesIdx < 0)
+                    {
+                        updateAndSubscribePage(newPage);
+                    }
+                    newPage->draw(&canvas);
                 }
                 _last_pos_x = _last_pos_y = 0xFFFF;
             }
@@ -505,7 +529,7 @@ void showBatteryIndicator()
         battery = 1;
     }
     uint8_t px = battery * 25;
-    char buf[4];
+    char buf[5];
     sprintf(buf, "%d%%", (int)(battery * 100));
     canvas.fillRect(img_x + 3, img_y + 10, px, 13, 15);
 
@@ -517,6 +541,35 @@ void showBatteryIndicator()
     canvas.deleteCanvas();
 }
 
+void showWakeUpIndicator()
+{
+    canvas.createCanvas(400, 15);
+
+    canvas.fillCircle(100, -23, 40, 15);
+
+    canvas.setTextSize(FONT_SIZE_LABEL);
+    canvas.setTextDatum(TC_DATUM);
+    canvas.setTextColor(0);
+    canvas.drawString("^", 100, 0);
+
+    canvas.setTextSize(FONT_SIZE_LABEL_SMALL);
+    canvas.setTextColor(15);
+    canvas.drawString("3s drücken", 200, 0);
+
+    canvas.pushCanvas(402, 0, UPDATE_MODE_GLD16);
+    canvas.deleteCanvas();
+}
+
+void showSleepText()
+{
+    canvas.createCanvas(150, 30);
+    canvas.setTextSize(FONT_SIZE_LABEL);
+    canvas.setTextDatum(TL_DATUM);
+    canvas.drawString("ZzzZzz", 40, 0);
+    canvas.pushCanvas(0, 70, UPDATE_MODE_DU);
+    canvas.deleteCanvas();
+}
+
 void shutdown()
 {
     // TODO draw hint for wakeup by button press
@@ -524,17 +577,13 @@ void shutdown()
 
     showBatteryIndicator();
 
+    showWakeUpIndicator();
+
+    // showSleepText();
+
     File savedState = LittleFS.open(SAVED_STATE_FILE, "w", true);
     savedState.print(currentPage.c_str());
     savedState.close();
-
-    canvas.createCanvas(150, 30);
-    canvas.setTextSize(FONT_SIZE_LABEL);
-    canvas.setTextDatum(TL_DATUM);
-    canvas.drawString("ZzzZzz", 40, 0);
-    canvas.pushCanvas(0, 70, UPDATE_MODE_DU);
-
-    canvas.deleteCanvas();
 
     delay(1000);
 
