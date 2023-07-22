@@ -417,7 +417,6 @@ M5PanelPage *M5PanelPage::updateWidget(JsonObject json, String widgetId, String 
 
 void M5PanelPage::updateAllWidgets(DynamicJsonDocument json)
 {
-    title = json["title"].as<String>();
     for (size_t i = 0; i < numElements; i++)
     {
         elements[i]->update(json["widgets"][i]);
@@ -877,7 +876,7 @@ boolean sendSwitchTouch(M5PanelUIElement *touchedElement)
         }
         // implicitly uses first state when current state not found
         newState = mappings[nextStateIndex]["command"].as<String>();
-        Serial.printf("Current state: %s, new state: %s", itemState, newState);
+        Serial.printf("Current state: %s, new state: %s\n", itemState, newState);
     }
     postValue(json["item"]["link"], newState);
     return true;
