@@ -17,8 +17,6 @@
 #define ERR_WIFI_NOT_CONNECTED "ERROR: Wifi not connected"
 #define ERR_HTTP_ERROR "ERROR: HTTP code "
 
-#define DEBUG true
-
 #define FONT_CACHE_SIZE 256
 
 // Global vars
@@ -133,6 +131,7 @@ void updateAndSubscribePage(M5PanelPage *page)
 {
     DynamicJsonDocument jsonData = subscribePage(page->identifier);
     page->updateAllWidgets(jsonData);
+    jsonData.clear();
 }
 
 void updateAndSubscribeCurrentPage()
@@ -380,14 +379,18 @@ void checkTouch()
                 {
                     xSemaphoreTake(pageChangeSemaphore, PAGE_CHANGE_WAIT / portTICK_PERIOD_MS);
                     // CRITICAL SECTION OF PAGE CHANGE
+
+                    int oldPageChoicesIdx = currentPage.lastIndexOf("_choices_");
+                    int newPageChoicesIdx = newPage->identifier.lastIndexOf("_choices_");
+
                     currentPage = newPage->identifier;
                     log_d("checkTouch: new current page after touch: %s", currentPage.c_str());
-                    int choicesIdx = newPage->identifier.lastIndexOf("_choices_");
-                    if (choicesIdx < 0)
+                    if (oldPageChoicesIdx < 0 && newPageChoicesIdx < 0) // no subscription update if navigating from / to choices
                     {
                         updateAndSubscribePage(newPage);
                     }
                     newPage->draw(&touchCanvas);
+
                     // CRITICAL SECTION OF PAGE CHANGE END
                     xSemaphoreGive(pageChangeSemaphore);
                 }
