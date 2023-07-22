@@ -24,6 +24,7 @@
 
 // Global vars
 M5EPD_Canvas canvas(&M5.EPD);
+M5EPD_Canvas touchCanvas(&M5.EPD);
 
 WiFiClient subscribeClient;
 
@@ -34,6 +35,9 @@ DynamicJsonDocument jsonDoc(60000); // size to be checked
 
 M5PanelPage *rootPage = NULL;
 String currentPage = "" + String(OPENHAB_SITEMAP) + "_0";
+
+#define PAGE_CHANGE_WAIT 10000
+SemaphoreHandle_t pageChangeSemaphore = xSemaphoreCreateBinary();
 
 unsigned long loopStartMillis = 0;
 long interactionStartMillis = 0;
@@ -245,8 +249,15 @@ void parseSubscriptionData(String jsonDataStr)
     {
         String widgetId = jsonData["widgetId"];
         debug(F("parseSubscriptionData"), "Widget changed: " + widgetId);
+
+        xSemaphoreTake(pageChangeSemaphore, PAGE_CHANGE_WAIT / portTICK_PERIOD_MS);
+        // CRITICAL SECTION PAGE UPDATE
+
         // update widget and redraw if widget on currently shown page
         rootPage->updateWidget(jsonData.as<JsonObject>(), widgetId, currentPage, &canvas);
+
+        // CRITICAL SECTION PAGE UPDATE END
+        xSemaphoreGive(pageChangeSemaphore);
     }
     else if (!jsonData["TYPE"].isNull())
     {
@@ -257,9 +268,15 @@ void parseSubscriptionData(String jsonDataStr)
         }
         else if (jsonDataType.equals("SITEMAP_CHANGED"))
         {
+            xSemaphoreTake(pageChangeSemaphore, PAGE_CHANGE_WAIT / portTICK_PERIOD_MS);
+            // CRITICAL SECTION PAGE UPDATE
+
             debug(F("parseSubscriptionData"), F("Sitemap changed, reloading"));
             updateSiteMap();
             updateAndSubscribeCurrentPage();
+
+            // CRITICAL SECTION PAGE UPDATE END
+            xSemaphoreGive(pageChangeSemaphore);
         }
     }
     jsonData.clear();
@@ -329,9 +346,222 @@ boolean readSavedState()
     }
 }
 
+void checkSubscription()
+{
+    // Subscribe or re-subscribe to sitemap
+    if (!subscribeClient.connected())
+    {
+        Serial.println(F("subscribeClient not connected, connecting..."));
+        if (!subscribe())
+        {
+            delay(300);
+        }
+    }
+
+    // Check and get subscription data
+    while (subscribeClient.available())
+    {
+        String subscriptionReceivedData = subscribeClient.readStringUntil('\n');
+        int dataStart = subscriptionReceivedData.indexOf("data: ");
+        if (dataStart > -1) // received data contains "data: "
+        {
+            String subscriptionData = subscriptionReceivedData.substring(dataStart + 6); // Remove chars before "data: "
+            int dataEnd = subscriptionData.indexOf("\n\n");
+            subscriptionData = subscriptionData.substring(0, dataEnd);
+            parseSubscriptionData(subscriptionData);
+        }
+    }
+}
+
+void checkTouch()
+{
+    if (M5.TP.avaliable())
+    {
+        M5.TP.update();
+        bool is_finger_up = M5.TP.isFingerUp();
+        if (is_finger_up)
+        {
+            if (_last_pos_x != 0xFFFF && _last_pos_y != 0xFFFF)
+            {
+                // user interaction detected
+                debug(F("checkTouch"), "resetting interactionStartMillis");
+                interactionStartMillis = loopStartMillis;
+
+                // process touch on finger lifting
+                M5PanelPage *newPage = rootPage->processTouch(currentPage, _last_pos_x, _last_pos_y, &touchCanvas);
+                if (currentPage != newPage->identifier)
+                {
+                    xSemaphoreTake(pageChangeSemaphore, PAGE_CHANGE_WAIT / portTICK_PERIOD_MS);
+                    // CRITICAL SECTION OF PAGE CHANGE
+                    currentPage = newPage->identifier;
+                    debug(F("checkTouch"), "new current page after touch: " + currentPage);
+                    int choicesIdx = newPage->identifier.lastIndexOf("_choices_");
+                    if (choicesIdx < 0)
+                    {
+                        updateAndSubscribePage(newPage);
+                    }
+                    newPage->draw(&touchCanvas);
+                    // CRITICAL SECTION OF PAGE CHANGE END
+                    xSemaphoreGive(pageChangeSemaphore);
+                }
+                _last_pos_x = _last_pos_y = 0xFFFF;
+            }
+        }
+        else
+        {
+            _last_pos_x = M5.TP.readFingerX(0);
+            _last_pos_y = M5.TP.readFingerY(0);
+        }
+        M5.TP.flush();
+    }
+}
+
+void showBatteryIndicator()
+{
+    M5.BatteryADCBegin();
+
+    touchCanvas.createCanvas(150, 40);
+
+    int img_y = 5;
+    int img_x = 40;
+    int img_height = 32;
+    int img_width = 32;
+
+    touchCanvas.pushImage(img_x, img_y, 32, 32, ImageResource_status_bar_battery_32x32);
+    uint32_t vol = M5.getBatteryVoltage();
+
+    if (vol < 3300)
+    {
+        vol = 3300;
+    }
+    else if (vol > 4350)
+    {
+        vol = 4350;
+    }
+    float battery = (float)(vol - 3300) / (float)(4350 - 3300);
+    if (battery <= 0.01)
+    {
+        battery = 0.01;
+    }
+    if (battery > 1)
+    {
+        battery = 1;
+    }
+    uint8_t px = battery * 25;
+    char buf[5];
+    sprintf(buf, "%d%%", (int)(battery * 100));
+    touchCanvas.fillRect(img_x + 3, img_y + 10, px, 13, 15);
+
+    touchCanvas.setTextDatum(ML_DATUM);
+    touchCanvas.setTextSize(FONT_SIZE_LABEL_SMALL);
+    touchCanvas.drawString(buf, img_x + img_width + 5, img_y + img_height / 2);
+    touchCanvas.pushCanvas(0, 500, UPDATE_MODE_GLD16);
+
+    touchCanvas.deleteCanvas();
+}
+
+void showWakeUpIndicator()
+{
+    touchCanvas.createCanvas(400, 15);
+
+    touchCanvas.fillCircle(100, -23, 40, 15);
+
+    touchCanvas.setTextSize(FONT_SIZE_LABEL);
+    touchCanvas.setTextDatum(TC_DATUM);
+    touchCanvas.setTextColor(0);
+    touchCanvas.drawString("^", 100, 0);
+
+    touchCanvas.setTextSize(FONT_SIZE_LABEL_SMALL);
+    touchCanvas.setTextColor(15);
+    touchCanvas.drawString("3s drücken", 200, 0);
+
+    touchCanvas.pushCanvas(402, 0, UPDATE_MODE_GLD16);
+    touchCanvas.deleteCanvas();
+}
+
+void showSleepText()
+{
+    touchCanvas.createCanvas(150, 30);
+    touchCanvas.setTextSize(FONT_SIZE_LABEL);
+    touchCanvas.setTextDatum(TL_DATUM);
+    touchCanvas.drawString("ZzzZzz", 40, 0);
+    touchCanvas.pushCanvas(0, 70, UPDATE_MODE_DU);
+    touchCanvas.deleteCanvas();
+}
+
+void shutdown()
+{
+    // TODO draw hint for wakeup by button press
+    // TODO configure to wake up from side button if possible
+
+    showBatteryIndicator();
+
+    showWakeUpIndicator();
+
+    // showSleepText();
+
+    File savedState = LittleFS.open(SAVED_STATE_FILE, "w", true);
+    savedState.print(currentPage.c_str());
+    savedState.close();
+
+    delay(1000);
+
+    // shut down M5 to save energy
+    // M5.shutdown(20);
+
+    M5.disableEPDPower();
+    M5.disableEXTPower();
+    M5.disableMainPower();
+    esp_sleep_enable_ext0_wakeup(GPIO_NUM_36, LOW); // TOUCH_INT
+    esp_sleep_enable_timer_wakeup(REFRESH_INTERVAL * 1000000);
+    esp_deep_sleep_start();
+    while (1)
+        ;
+}
+
+void loop() {}
+
+// Loop
+void updateLoop(void *pvParameters)
+{
+    while (true)
+    {
+        if (!SAMPLE_SITEMAP)
+        {
+            checkSubscription();
+        }
+
+        events(); // for ezTime
+
+        vTaskDelay(50 / portTICK_PERIOD_MS);
+    }
+}
+
+void interactionLoop(void *pvParameters)
+{
+    while (true)
+    {
+        loopStartMillis = millis();
+
+        checkTouch();
+
+        unsigned long durationSinceInteraction = loopStartMillis - interactionStartMillis;
+
+        if (durationSinceInteraction > (TIME_UNTIL_SLEEP * 1000))
+        {
+            debug(F("loop"), "Shutting down after " + String(durationSinceInteraction) + "ms since interaction");
+            shutdown();
+        }
+
+        vTaskDelay(5 / portTICK_PERIOD_MS);
+    }
+}
+
 void setup()
 {
     Serial.println(F("Setup start..."));
+
+    xSemaphoreGive(pageChangeSemaphore); //binary semaphore must first be given to be free
 
     if (M5.BtnP.read() == 0)
     {
@@ -387,15 +617,17 @@ void setup()
     Serial.println();
 
     esp_err_t errorCode = canvas.loadFont("/FreeSansBold.ttf", LittleFS);
+    touchCanvas.loadFont("/FreeSansBold.ttf", LittleFS);
     // TODO : Should fail and stop if font not found
     Serial.print("Font load exit code:");
     Serial.println(errorCode);
 
     canvas.createRender(FONT_SIZE_LABEL, FONT_CACHE_SIZE);
     canvas.createRender(FONT_SIZE_LABEL_SMALL, FONT_CACHE_SIZE);
-    canvas.createRender(FONT_SIZE_STATUS_CENTER, FONT_CACHE_SIZE);
-    canvas.createRender(FONT_SIZE_STATUS_BOTTOM, FONT_CACHE_SIZE);
-    canvas.createRender(FONT_SIZE_SYSINFO, FONT_CACHE_SIZE);
+    canvas.createRender(FONT_SIZE_CONTROL, FONT_CACHE_SIZE);
+
+    touchCanvas.createRender(FONT_SIZE_LABEL, FONT_CACHE_SIZE);
+    touchCanvas.createRender(FONT_SIZE_LABEL_SMALL, FONT_CACHE_SIZE);
 
     canvas.setTextSize(FONT_SIZE_LABEL);
 
@@ -429,197 +661,12 @@ void setup()
     {
         subscribe();
     }
-}
 
-void checkSubscription()
-{
-    // Subscribe or re-subscribe to sitemap
-    if (!subscribeClient.connected())
-    {
-        Serial.println(F("subscribeClient not connected, connecting..."));
-        if (!subscribe())
-        {
-            delay(300);
-        }
-    }
+    xTaskCreatePinnedToCore(interactionLoop, "interactionLoop", 4096, NULL, 0,
+                            NULL, 0);
 
-    // Check and get subscription data
-    while (subscribeClient.available())
-    {
-        String subscriptionReceivedData = subscribeClient.readStringUntil('\n');
-        int dataStart = subscriptionReceivedData.indexOf("data: ");
-        if (dataStart > -1) // received data contains "data: "
-        {
-            String subscriptionData = subscriptionReceivedData.substring(dataStart + 6); // Remove chars before "data: "
-            int dataEnd = subscriptionData.indexOf("\n\n");
-            subscriptionData = subscriptionData.substring(0, dataEnd);
-            parseSubscriptionData(subscriptionData);
-        }
-    }
-}
+    xTaskCreatePinnedToCore(updateLoop, "updateLoop", 4096, NULL, 1,
+                            NULL, 0);
 
-void checkTouch()
-{
-    if (M5.TP.avaliable())
-    {
-        M5.TP.update();
-        bool is_finger_up = M5.TP.isFingerUp();
-        if (is_finger_up)
-        {
-            if (_last_pos_x != 0xFFFF && _last_pos_y != 0xFFFF)
-            {
-                // user interaction detected
-                debug(F("checkTouch"), "resetting interactionStartMillis");
-                interactionStartMillis = loopStartMillis;
-
-                // process touch on finger lifting
-                M5PanelPage *newPage = rootPage->processTouch(currentPage, _last_pos_x, _last_pos_y, &canvas);
-                if (currentPage != newPage->identifier)
-                {
-                    currentPage = newPage->identifier;
-                    debug(F("checkTouch"), "new current page after touch: " + currentPage);
-                    int choicesIdx = newPage->identifier.lastIndexOf("_choices_");
-                    if (choicesIdx < 0)
-                    {
-                        updateAndSubscribePage(newPage);
-                    }
-                    newPage->draw(&canvas);
-                }
-                _last_pos_x = _last_pos_y = 0xFFFF;
-            }
-        }
-        else
-        {
-            _last_pos_x = M5.TP.readFingerX(0);
-            _last_pos_y = M5.TP.readFingerY(0);
-        }
-        M5.TP.flush();
-    }
-}
-
-void showBatteryIndicator()
-{
-    M5.BatteryADCBegin();
-
-    canvas.createCanvas(150, 40);
-
-    int img_y = 5;
-    int img_x = 40;
-    int img_height = 32;
-    int img_width = 32;
-
-    canvas.pushImage(img_x, img_y, 32, 32, ImageResource_status_bar_battery_32x32);
-    uint32_t vol = M5.getBatteryVoltage();
-
-    if (vol < 3300)
-    {
-        vol = 3300;
-    }
-    else if (vol > 4350)
-    {
-        vol = 4350;
-    }
-    float battery = (float)(vol - 3300) / (float)(4350 - 3300);
-    if (battery <= 0.01)
-    {
-        battery = 0.01;
-    }
-    if (battery > 1)
-    {
-        battery = 1;
-    }
-    uint8_t px = battery * 25;
-    char buf[5];
-    sprintf(buf, "%d%%", (int)(battery * 100));
-    canvas.fillRect(img_x + 3, img_y + 10, px, 13, 15);
-
-    canvas.setTextDatum(ML_DATUM);
-    canvas.setTextSize(FONT_SIZE_LABEL_SMALL);
-    canvas.drawString(buf, img_x + img_width + 5, img_y + img_height / 2);
-    canvas.pushCanvas(0, 500, UPDATE_MODE_GLD16);
-
-    canvas.deleteCanvas();
-}
-
-void showWakeUpIndicator()
-{
-    canvas.createCanvas(400, 15);
-
-    canvas.fillCircle(100, -23, 40, 15);
-
-    canvas.setTextSize(FONT_SIZE_LABEL);
-    canvas.setTextDatum(TC_DATUM);
-    canvas.setTextColor(0);
-    canvas.drawString("^", 100, 0);
-
-    canvas.setTextSize(FONT_SIZE_LABEL_SMALL);
-    canvas.setTextColor(15);
-    canvas.drawString("3s drücken", 200, 0);
-
-    canvas.pushCanvas(402, 0, UPDATE_MODE_GLD16);
-    canvas.deleteCanvas();
-}
-
-void showSleepText()
-{
-    canvas.createCanvas(150, 30);
-    canvas.setTextSize(FONT_SIZE_LABEL);
-    canvas.setTextDatum(TL_DATUM);
-    canvas.drawString("ZzzZzz", 40, 0);
-    canvas.pushCanvas(0, 70, UPDATE_MODE_DU);
-    canvas.deleteCanvas();
-}
-
-void shutdown()
-{
-    // TODO draw hint for wakeup by button press
-    // TODO configure to wake up from side button if possible
-
-    showBatteryIndicator();
-
-    showWakeUpIndicator();
-
-    // showSleepText();
-
-    File savedState = LittleFS.open(SAVED_STATE_FILE, "w", true);
-    savedState.print(currentPage.c_str());
-    savedState.close();
-
-    delay(1000);
-
-    // shut down M5 to save energy
-    // M5.shutdown(20);
-
-    M5.disableEPDPower();
-    M5.disableEXTPower();
-    M5.disableMainPower();
-    esp_sleep_enable_ext0_wakeup(GPIO_NUM_36, LOW); // TOUCH_INT
-    esp_sleep_enable_timer_wakeup(REFRESH_INTERVAL * 1000000);
-    esp_deep_sleep_start();
-    while (1)
-        ;
-}
-
-// Loop
-void loop()
-{
-    loopStartMillis = millis();
-    if (!SAMPLE_SITEMAP)
-    {
-        checkSubscription();
-    }
-
-    checkTouch();
-
-    events(); // for ezTime
-
-    unsigned long durationSinceInteraction = loopStartMillis - interactionStartMillis;
-
-    if (durationSinceInteraction > (TIME_UNTIL_SLEEP * 1000))
-    {
-        debug(F("loop"), "Shutting down after " + String(durationSinceInteraction) + "ms since interaction");
-        shutdown();
-    }
-
-    delay(50);
+    vApplicationIdleHook();
 }

@@ -706,7 +706,7 @@ void M5PanelUIElement::drawStatusAndControlArea(M5EPD_Canvas *canvas, int elemen
     case M5PanelElementType::Slider:
     case M5PanelElementType::Setpoint:
         // draw +/- symbols
-        canvas->setTextSize(FONT_SIZE_STATUS_CENTER);
+        canvas->setTextSize(FONT_SIZE_CONTROL);
         canvas->setTextDatum(ML_DATUM);
         canvas->drawString("-", MARGIN, controlYCenter);
         canvas->setTextDatum(MR_DATUM);
