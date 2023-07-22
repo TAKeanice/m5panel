@@ -8,6 +8,4 @@
 
 #define OPENHAB_SITEMAP "m5panel" // Name of displayed sitemap
 
-#define DISPLAY_SYSINFO false
-
 #define SAMPLE_SITEMAP false
