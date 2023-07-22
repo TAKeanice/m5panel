@@ -16,7 +16,6 @@
 
 #define ERR_WIFI_NOT_CONNECTED "ERROR: Wifi not connected"
 #define ERR_HTTP_ERROR "ERROR: HTTP code "
-#define ERR_GETITEMSTATE "ERROR in getItemState"
 
 #define DEBUG true
 
@@ -61,17 +60,6 @@ Timezone openhabTZ;
 
 // HTTP and REST
 
-void debug(String function, String message)
-{
-    if (DEBUG)
-    {
-        Serial.print(F("DEBUG (function "));
-        Serial.print(function);
-        Serial.print(F("): "));
-        Serial.println(message);
-    }
-}
-
 bool httpRequest(String &url, String &response)
 {
     if (SAMPLE_SITEMAP)
@@ -79,10 +67,10 @@ bool httpRequest(String &url, String &response)
         return false;
     }
 
-    debug(F("httpRequest"), "HTTP request to " + String(url));
+    log_d("httpRequest: HTTP request to %s", String(url).c_str());
     if (WiFi.status() != WL_CONNECTED)
     {
-        Serial.println(ERR_WIFI_NOT_CONNECTED);
+        log_d(ERR_WIFI_NOT_CONNECTED);
         response = String(ERR_WIFI_NOT_CONNECTED);
         return false;
     }
@@ -95,14 +83,14 @@ bool httpRequest(String &url, String &response)
     int httpCode = httpClient.GET();
     if (httpCode != HTTP_CODE_OK)
     {
-        Serial.println(String(ERR_HTTP_ERROR) + String(httpCode));
+        log_d("ERROR: HTTP code %d", httpCode);
         response = String(ERR_HTTP_ERROR) + String(httpCode);
         httpClient.end();
         return false;
     }
     response = httpClient.getString();
     httpClient.end();
-    debug(F("httpRequest"), F("HTTP request done"));
+    log_d("httpRequest: HTTP request done");
     return true;
 }
 
@@ -173,7 +161,7 @@ bool subscribe()
     int httpCode = httpClient.POST("");
     if (httpCode != HTTP_CODE_OK)
     {
-        Serial.println(String(ERR_HTTP_ERROR) + String(httpCode));
+        log_d("ERROR: HTTP code %d", httpCode);
         httpClient.end();
         return false;
     }
@@ -181,12 +169,11 @@ bool subscribe()
     httpClient.end();
 
     DynamicJsonDocument subscribeResponseJson(3000);
-    // Serial.println("HTTP SUBSCRIBE: " + subscribeResponse);
     deserializeJson(subscribeResponseJson, subscribeResponse);
 
     // String subscriptionURL = subscribeResponseJson["Location"].as<String>();
     String baseUrl = subscribeResponseJson["context"]["headers"]["Location"][0];
-    debug(F("subscribe"), "Full subscriptionURL: " + baseUrl);
+    log_d("subscribe: Full subscriptionURL: %s", baseUrl.c_str());
 
     subscribeResponseJson.clear();
 
@@ -194,7 +181,7 @@ bool subscribe()
 
     String subscriptionURL = baseUrl.substring(baseUrl.indexOf("/rest/sitemaps"));
     String parametrizedUrl = subscriptionURL + "?sitemap=" + OPENHAB_SITEMAP + "&pageid=" + getCurrentSitemapPageId();
-    debug(F("subscribe"), "subscriptionURL: " + parametrizedUrl);
+    log_d("subscribe: subscriptionURL: %s", parametrizedUrl.c_str());
     subscribeClient.connect(OPENHAB_HOST, OPENHAB_PORT);
     subscribeClient.println("GET " + parametrizedUrl + " HTTP/1.1");
     subscribeClient.println("Host: " + String(OPENHAB_HOST) + ":" + String(OPENHAB_PORT));
@@ -213,7 +200,7 @@ void updateSiteMap()
     String sitemapStr;
 
 #if SAMPLE_SITEMAP
-    debug(F("updateSiteMap"), "Load sample sitemap");
+    log_d("updateSiteMap: Load sample sitemap");
     File f = LittleFS.open("/sample_sitemap.json");
     sitemapStr = f.readString();
 #else
@@ -226,7 +213,7 @@ void updateSiteMap()
 
     JsonObject rootPageJson = jsonDoc.as<JsonObject>()["homepage"];
     rootPage = new M5PanelPage(rootPageJson);
-    debug(F("updateSiteMap"), "current page: " + currentPage);
+    log_d("updateSiteMap: current page: %s", currentPage.c_str());
     if (currentPage == "")
     {
         currentPage = rootPage->identifier;
@@ -244,11 +231,11 @@ void parseSubscriptionData(String jsonDataStr)
 {
     DynamicJsonDocument jsonData(30000);
     deserializeJson(jsonData, jsonDataStr);
-    debug(F("parseSubscriptionData"), jsonDataStr);
+    log_d("parseSubscriptionData: %s", jsonDataStr.c_str());
     if (!jsonData["widgetId"].isNull()) // Data Widget (subscription)
     {
         String widgetId = jsonData["widgetId"];
-        debug(F("parseSubscriptionData"), "Widget changed: " + widgetId);
+        log_d("parseSubscriptionData: Widget changed: %s", widgetId.c_str());
 
         xSemaphoreTake(pageChangeSemaphore, PAGE_CHANGE_WAIT / portTICK_PERIOD_MS);
         // CRITICAL SECTION PAGE UPDATE
@@ -264,14 +251,14 @@ void parseSubscriptionData(String jsonDataStr)
         String jsonDataType = jsonData["TYPE"];
         if (jsonDataType.equals("ALIVE"))
         {
-            debug(F("parseSubscriptionData"), F("Subscription Alive"));
+            log_d("parseSubscriptionData: Subscription Alive");
         }
         else if (jsonDataType.equals("SITEMAP_CHANGED"))
         {
             xSemaphoreTake(pageChangeSemaphore, PAGE_CHANGE_WAIT / portTICK_PERIOD_MS);
             // CRITICAL SECTION PAGE UPDATE
 
-            debug(F("parseSubscriptionData"), F("Sitemap changed, reloading"));
+            log_d("parseSubscriptionData: Sitemap changed, reloading");
             updateSiteMap();
             updateAndSubscribeCurrentPage();
 
@@ -290,13 +277,13 @@ void setTimeZone() // Gets timezone from OpenHAB
         DynamicJsonDocument doc(2000);
         deserializeJson(doc, response);
         String timezone = doc["timezone"];
-        debug("setTimeZone", "OpenHAB timezone= " + timezone);
+        log_d("setTimeZone: OpenHAB timezone = %s", timezone.c_str());
         doc.clear();
         openhabTZ.setLocation(timezone);
     }
     else
     {
-        debug("setTimeZone", "Could not get OpenHAB timezone");
+        log_d("setTimeZone: Could not get OpenHAB timezone");
     }
 }
 
@@ -318,13 +305,13 @@ void syncRTC()
     RTCtime.hour = dateTime.substring(11,13).toInt();
     RTCtime.min  = dateTime.substring(14,16).toInt();
     RTCtime.sec  = dateTime.substring(17,19).toInt();
-    debug("syncRTC","Time="+String(RTCtime.hour)+":"+String(RTCtime.min)+":"+String(RTCtime.sec));
+    log_d("syncRTC: Time="+String(RTCtime.hour)+":"+String(RTCtime.min)+":"+String(RTCtime.sec));
     M5.RTC.setTime(&RTCtime);
 
     RTCDate.year = dateTime.substring(0,4).toInt();
     RTCDate.mon  = dateTime.substring(5,7).toInt();
     RTCDate.day  = dateTime.substring(8,10).toInt();
-    debug("syncRTC","Date="+String(RTCDate.year)+"-"+String(RTCDate.mon)+"-"+String(RTCDate.day));
+    log_d("syncRTC: Date="+String(RTCDate.year)+"-"+String(RTCDate.mon)+"-"+String(RTCDate.day));
     M5.RTC.setDate(&RTCDate);
     */
 }
@@ -335,7 +322,7 @@ boolean readSavedState()
     {
         File savedState = LittleFS.open(SAVED_STATE_FILE);
         currentPage = savedState.readString();
-        debug(F("readSavedState"), "read current page from saved file: " + currentPage);
+        log_d("readSavedState: read current page from saved file: %s", currentPage.c_str());
         savedState.close();
         LittleFS.remove(SAVED_STATE_FILE);
         return true;
@@ -351,7 +338,7 @@ void checkSubscription()
     // Subscribe or re-subscribe to sitemap
     if (!subscribeClient.connected())
     {
-        Serial.println(F("subscribeClient not connected, connecting..."));
+        log_d("subscribeClient not connected, connecting...");
         if (!subscribe())
         {
             delay(300);
@@ -384,7 +371,7 @@ void checkTouch()
             if (_last_pos_x != 0xFFFF && _last_pos_y != 0xFFFF)
             {
                 // user interaction detected
-                debug(F("checkTouch"), "resetting interactionStartMillis");
+                log_d("checkTouch: resetting interactionStartMillis");
                 interactionStartMillis = loopStartMillis;
 
                 // process touch on finger lifting
@@ -394,7 +381,7 @@ void checkTouch()
                     xSemaphoreTake(pageChangeSemaphore, PAGE_CHANGE_WAIT / portTICK_PERIOD_MS);
                     // CRITICAL SECTION OF PAGE CHANGE
                     currentPage = newPage->identifier;
-                    debug(F("checkTouch"), "new current page after touch: " + currentPage);
+                    log_d("checkTouch: new current page after touch: %s", currentPage.c_str());
                     int choicesIdx = newPage->identifier.lastIndexOf("_choices_");
                     if (choicesIdx < 0)
                     {
@@ -549,7 +536,7 @@ void interactionLoop(void *pvParameters)
 
         if (durationSinceInteraction > (TIME_UNTIL_SLEEP * 1000))
         {
-            debug(F("loop"), "Shutting down after " + String(durationSinceInteraction) + "ms since interaction");
+            log_d("interactionLoop: Shutting down after %d ms since interaction", durationSinceInteraction);
             shutdown();
         }
 
@@ -559,9 +546,9 @@ void interactionLoop(void *pvParameters)
 
 void setup()
 {
-    Serial.println(F("Setup start..."));
+    log_d("Setup start...");
 
-    xSemaphoreGive(pageChangeSemaphore); //binary semaphore must first be given to be free
+    xSemaphoreGive(pageChangeSemaphore); // binary semaphore must first be given to be free
 
     if (M5.BtnP.read() == 0)
     {
@@ -578,24 +565,24 @@ void setup()
     M5.RTC.begin();
 
     // FS Setup
-    Serial.println(F("Inizializing FS..."));
+    log_d("Inizializing FS...");
     if (SPIFFS.begin())
     {
-        Serial.println(F("SPIFFS mounted correctly."));
+        log_d("SPIFFS mounted correctly.");
     }
     else
     {
-        Serial.println(F("!An error occurred during SPIFFS mounting"));
+        log_d("!An error occurred during SPIFFS mounting");
     }
 
-    Serial.println(F("Inizializing LittleFS FS..."));
+    log_d("Inizializing LittleFS FS...");
     if (LittleFS.begin())
     {
-        Serial.println(F("LittleFS mounted correctly."));
+        log_d("LittleFS mounted correctly.");
     }
     else
     {
-        Serial.println(F("!An error occurred during LittleFS mounting"));
+        log_d("!An error occurred during LittleFS mounting");
     }
 
     // Get all information of LittleFS
@@ -604,23 +591,16 @@ void setup()
 
     // TODO : Should fail and stop if littlefs error
 
-    Serial.println("===== File system info =====");
+    log_d("===== File system info =====");
 
-    Serial.print("Total space:      ");
-    Serial.print(totalBytes);
-    Serial.println("byte");
+    log_d("Total space: %d byte", totalBytes);
 
-    Serial.print("Total space used: ");
-    Serial.print(usedBytes);
-    Serial.println("byte");
-
-    Serial.println();
+    log_d("Total space used: %d byte", usedBytes);
 
     esp_err_t errorCode = canvas.loadFont("/FreeSansBold.ttf", LittleFS);
     touchCanvas.loadFont("/FreeSansBold.ttf", LittleFS);
     // TODO : Should fail and stop if font not found
-    Serial.print("Font load exit code:");
-    Serial.println(errorCode);
+    log_d("Font load exit code: %d", errorCode);
 
     canvas.createRender(FONT_SIZE_LABEL, FONT_CACHE_SIZE);
     canvas.createRender(FONT_SIZE_LABEL_SMALL, FONT_CACHE_SIZE);
@@ -637,17 +617,15 @@ void setup()
     // Setup Wifi
     if (!SAMPLE_SITEMAP)
     {
-        Serial.println(F("Starting Wifi"));
+        log_d("Starting Wifi");
         WiFi.begin(WIFI_SSID, WIFI_PSK);
         while (WiFi.status() != WL_CONNECTED)
         {
             delay(500);
-            Serial.print(".");
+            log_d(".");
         }
-        Serial.println();
-        Serial.println(F("WiFi connected"));
-        Serial.println(F("IP address: "));
-        Serial.println(WiFi.localIP());
+        log_d("WiFi connected");
+        log_d("IP address: %s", String(WiFi.localIP()).c_str());
 
         // NTP stuff
         setInterval(3600);

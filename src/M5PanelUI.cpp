@@ -50,21 +50,21 @@ String parseWidgetLabel(String label)
 
 void setParent(M5PanelUIElement *element, M5PanelPage *parent)
 {
-    Serial.printf("setting parent of %s (%s) to %s (%s)\n",
-                  element->title.c_str(),
-                  element->identifier.c_str(),
-                  parent != NULL ? parent->title.c_str() : "NULL",
-                  parent != NULL ? parent->identifier.c_str() : "NULL");
+    log_d("setting parent of %s (%s) to %s (%s)",
+          element->title.c_str(),
+          element->identifier.c_str(),
+          parent != NULL ? parent->title.c_str() : "NULL",
+          parent != NULL ? parent->identifier.c_str() : "NULL");
     element->parent = parent;
 }
 
 void setParent(M5PanelPage *page, M5PanelUIElement *parent)
 {
-    Serial.printf("setting parent of %s (%s) to %s (%s)\n",
-                  page->title.c_str(),
-                  page->identifier.c_str(),
-                  parent != NULL ? parent->title.c_str() : "NULL",
-                  parent != NULL ? parent->identifier.c_str() : "NULL");
+    log_d("setting parent of %s (%s) to %s (%s)",
+          page->title.c_str(),
+          page->identifier.c_str(),
+          parent != NULL ? parent->title.c_str() : "NULL",
+          parent != NULL ? parent->identifier.c_str() : "NULL");
     page->parent = parent;
 }
 
@@ -83,7 +83,7 @@ M5PanelPage::M5PanelPage(JsonObject json, int pageIndex)
     String titleString = json["title"].isNull() ? "" : json["title"].as<String>();
     title = parseWidgetLabel(label + titleString);
 
-    Serial.println("Initialized page: " + title + " (number " + (pageIndex + 1) + ")");
+    log_d("Initialized page: %s (number %d)", title.c_str(), (pageIndex + 1));
 
     size_t pageOffset = pageIndex * MAX_ELEMENTS;
     JsonArray widgets = json["widgets"];
@@ -137,7 +137,7 @@ M5PanelPage::M5PanelPage(M5PanelUIElement *selection, JsonObject json, int pageI
 
 M5PanelPage::~M5PanelPage()
 {
-    Serial.printf("delete page %s (%s)\n", title.c_str(), identifier.c_str());
+    log_d("delete page %s (%s)", title.c_str(), identifier.c_str());
     for (size_t i = 0; i < MAX_ELEMENTS; i++)
     {
         delete elements[i];
@@ -245,13 +245,13 @@ void M5PanelPage::drawNavigation(M5EPD_Canvas *canvas)
 
 M5PanelPage *navigate(M5PanelPage *navigationTarget, M5EPD_Canvas *canvas)
 {
-    Serial.printf("Navigating to %s (%s)\n", navigationTarget->title.c_str(), navigationTarget->identifier.c_str());
+    log_d("Navigating to %s (%s)", navigationTarget->title.c_str(), navigationTarget->identifier.c_str());
     return navigationTarget;
 }
 
 M5PanelPage *M5PanelPage::processNavigationTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas)
 {
-    Serial.println("Touched navigation area");
+    log_d("Touched navigation area");
     // touch within navigation area
     int arrowAreaHeight = PANEL_HEIGHT - 2 * NAV_MARGIN_TOP_BOTTOM;
     int singleArrowHeight = arrowAreaHeight / 3;
@@ -366,7 +366,6 @@ M5PanelPage *M5PanelPage::processTouch(String currentElement, uint16_t x, uint16
 
 M5PanelPage *M5PanelPage::updateWidget(JsonObject json, String widgetId, String currentPage, M5EPD_Canvas *canvas)
 {
-    // Serial.printf("Updating on page %s\n", identifier.c_str());
     for (size_t i = 0; i < numElements; i++)
     {
         M5PanelUIElement *element = elements[i];
@@ -374,13 +373,13 @@ M5PanelPage *M5PanelPage::updateWidget(JsonObject json, String widgetId, String 
         {
             continue;
         }
-        // Serial.printf("found widget %s\n", widgetId.c_str());
-        //  replace widget
+        log_d("found widget to update: %s", widgetId.c_str());
+        //  update widget
         boolean updated = elements[i]->update(json);
 
         if (updated && currentPage == identifier)
         {
-            // Serial.printf("redraw element %s\n", element->identifier.c_str());
+            log_d("redraw element %s", element->identifier.c_str());
             //  redraw widget
             drawElement(canvas, i, true);
         }
@@ -395,7 +394,7 @@ M5PanelPage *M5PanelPage::updateWidget(JsonObject json, String widgetId, String 
         // forward update command
         if (element->detail != NULL)
         {
-            // Serial.printf("Updating element %s detail\n", element->identifier.c_str());
+            log_d("Updating element %s detail", element->identifier.c_str());
             M5PanelPage *foundOnPage = element->detail->updateWidget(json, widgetId, currentPage, canvas);
             if (foundOnPage != NULL)
             {
@@ -407,7 +406,7 @@ M5PanelPage *M5PanelPage::updateWidget(JsonObject json, String widgetId, String 
     // not found on any of the subpages, search sibling page
     if (next != NULL)
     {
-        Serial.printf("Updating next page %s\n", next->identifier.c_str());
+        log_d("Updating next page %s", next->identifier.c_str());
         return next->updateWidget(json, widgetId, currentPage, canvas);
     }
 
@@ -514,7 +513,7 @@ M5PanelUIElement::M5PanelUIElement(JsonObject json)
         type = M5PanelElementType::Text; // sitemap contains bad element type, make it only text
     }
 
-    Serial.println("Initialized element: " + title + " with icon: " + icon + " state: " + state + " type: " + typeString);
+    log_d("Initialized element: %s  with icon: %s state: %s type: %s", title.c_str(), icon.c_str(), state.c_str(), typeString.c_str());
 
     // frames can have direct widgets, other items always seem to have a "linked page"
     JsonArray widgets = json["widgets"];
@@ -545,7 +544,7 @@ M5PanelUIElement::M5PanelUIElement(M5PanelUIElement *selection, JsonObject json,
 
 M5PanelUIElement::~M5PanelUIElement()
 {
-    Serial.printf("delete element %s (%s)\n", title.c_str(), identifier.c_str());
+    log_d("delete element %s (%s)", title.c_str(), identifier.c_str());
     delete detail;
     delete choices;
 }
@@ -772,7 +771,7 @@ M5PanelPage *M5PanelUIElement::forwardTouch(String currentElement, uint16_t x, u
 
 void postValue(String link, String newState)
 {
-    Serial.printf("Sending value %s\n", newState.c_str());
+    log_d("Sending value %s", newState.c_str());
     WiFiClient commandWifiClient;
     HTTPClient httpPost;
     httpPost.begin(commandWifiClient, link);
@@ -783,7 +782,7 @@ void postValue(String link, String newState)
 
 boolean sendChoiceTouch(M5PanelUIElement *touchedElement)
 {
-    Serial.println("send touch on choice");
+    log_d("send touch on choice");
     JsonObject json = touchedElement->json;
     JsonArray choices = json["item"]["commandDescription"]["commandOptions"];
     // find command for touched choice
@@ -811,7 +810,7 @@ int getStep(JsonObject widgetJson, JsonObject stateDescription)
 
 boolean sendPlusTouch(M5PanelUIElement *touchedElement)
 {
-    Serial.println("send touch on plus");
+    log_d("send touch on plus");
     JsonObject json = touchedElement->json;
     int currentState = json["item"]["state"].as<String>().toInt();
     JsonObject stateDescription = json["item"]["stateDescription"];
@@ -828,7 +827,7 @@ boolean sendPlusTouch(M5PanelUIElement *touchedElement)
 
 boolean sendMinusTouch(M5PanelUIElement *touchedElement)
 {
-    Serial.println("send touch on minus");
+    log_d("send touch on minus");
     JsonObject json = touchedElement->json;
     int currentState = json["item"]["state"].as<String>().toInt();
     JsonObject stateDescription = json["item"]["stateDescription"];
@@ -845,7 +844,7 @@ boolean sendMinusTouch(M5PanelUIElement *touchedElement)
 
 boolean sendSwitchTouch(M5PanelUIElement *touchedElement)
 {
-    Serial.println("send touch on switch");
+    log_d("send touch on switch");
     JsonObject json = touchedElement->json;
     // Decide how to process switch: Basic switches (without value mappings) get switched from "on" to "off", with value mappings switch one value further.
     // TODO same for json["item"]["commandDescription"]["commandOptions"]
@@ -876,7 +875,7 @@ boolean sendSwitchTouch(M5PanelUIElement *touchedElement)
         }
         // implicitly uses first state when current state not found
         newState = mappings[nextStateIndex]["command"].as<String>();
-        Serial.printf("Current state: %s, new state: %s\n", itemState, newState);
+        log_d("Current state: %s, new state: %s", itemState, newState);
     }
     postValue(json["item"]["link"], newState);
     return true;
@@ -885,7 +884,7 @@ boolean sendSwitchTouch(M5PanelUIElement *touchedElement)
 M5PanelPage *M5PanelUIElement::processTouch(uint16_t x, uint16_t y, M5EPD_Canvas *canvas, int *highlightX, int *highlightY, boolean (**callback)(M5PanelUIElement *))
 {
     // process touch on title / icon or control area for interaction
-    Serial.printf("Touched on item %s (title: %s) with coordinates (%d,%d) (relative to element frame)\n", identifier.c_str(), title.c_str(), x, y);
+    log_d("Touched on item %s (title: %s) with coordinates (%d,%d) (relative to element frame)", identifier.c_str(), title.c_str(), x, y);
 
     M5PanelPage *navigationTarget = NULL;
 
