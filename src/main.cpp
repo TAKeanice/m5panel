@@ -520,7 +520,7 @@ void updateLoop(void *pvParameters)
 
         events(); // for ezTime
 
-        vTaskDelay(50 / portTICK_PERIOD_MS);
+        vTaskDelay(200 / portTICK_PERIOD_MS);
     }
 }
 
@@ -540,7 +540,7 @@ void interactionLoop(void *pvParameters)
             shutdown();
         }
 
-        vTaskDelay(5 / portTICK_PERIOD_MS);
+        vTaskDelay(50 / portTICK_PERIOD_MS);
     }
 }
 
@@ -565,7 +565,7 @@ void setup()
     M5.RTC.begin();
 
     // FS Setup
-    log_d("Inizializing FS...");
+    /*log_d("Inizializing FS...");
     if (SPIFFS.begin())
     {
         log_d("SPIFFS mounted correctly.");
@@ -573,7 +573,7 @@ void setup()
     else
     {
         log_d("!An error occurred during SPIFFS mounting");
-    }
+    }*/
 
     log_d("Inizializing LittleFS FS...");
     if (LittleFS.begin())
@@ -640,8 +640,8 @@ void setup()
         subscribe();
     }
 
-    xTaskCreatePinnedToCore(interactionLoop, "interactionLoop", 4096, NULL, 0,
-                            NULL, 0);
+    xTaskCreatePinnedToCore(interactionLoop, "interactionLoop", 4096, NULL, 2,
+                            NULL, 1);
 
     xTaskCreatePinnedToCore(updateLoop, "updateLoop", 4096, NULL, 1,
                             NULL, 0);
