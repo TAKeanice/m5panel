@@ -37,6 +37,7 @@ private:
 
 public:
     String title;
+    int pageIndex;
     M5PanelUIElement *elements[6] = {NULL, NULL, NULL, NULL, NULL, NULL};
     M5PanelPage *previous = NULL;
     M5PanelPage *next = NULL;

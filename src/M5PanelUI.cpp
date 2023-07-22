@@ -74,6 +74,8 @@ M5PanelPage::M5PanelPage(JsonObject json) : M5PanelPage(json, 0) {}
 
 M5PanelPage::M5PanelPage(JsonObject json, int pageIndex)
 {
+    this->pageIndex = pageIndex;
+
     String widgetId = json["widgetId"].isNull() ? "" : json["widgetId"].as<String>();
     String id = json["id"].isNull() ? "" : json["id"].as<String>();
     identifier = id + widgetId + "_" + pageIndex;
@@ -418,7 +420,7 @@ void M5PanelPage::updateAllWidgets(DynamicJsonDocument json)
 {
     for (size_t i = 0; i < numElements; i++)
     {
-        elements[i]->update(json["widgets"][i]);
+        elements[i]->update(json["widgets"][i + pageIndex * MAX_ELEMENTS]);
     }
 }
 
