@@ -801,12 +801,12 @@ boolean sendChoiceTouch(M5PanelUIElement *touchedElement)
     return true;
 }
 
-int getStep(JsonObject widgetJson, JsonObject stateDescription)
+float getStep(JsonObject widgetJson, JsonObject stateDescription)
 {
     return !widgetJson["step"].isNull()
-               ? widgetJson["step"].as<String>().toInt()
+               ? widgetJson["step"].as<String>().toFloat()
                : (!stateDescription["step"].isNull()
-                      ? stateDescription["step"].as<String>().toInt()
+                      ? stateDescription["step"].as<String>().toFloat()
                       : 10);
 }
 
@@ -814,15 +814,15 @@ boolean sendPlusTouch(M5PanelUIElement *touchedElement)
 {
     log_d("send touch on plus");
     JsonObject json = touchedElement->json;
-    int currentState = json["item"]["state"].as<String>().toInt();
+    float currentState = json["item"]["state"].as<String>().toFloat();
     JsonObject stateDescription = json["item"]["stateDescription"];
-    int maxValue = !json["maxValue"].isNull()
-                       ? json["maxValue"].as<String>().toInt()
-                       : (!stateDescription["minimum"].isNull()
-                              ? stateDescription["maximum"].as<String>().toInt()
-                              : 100);
-    int step = getStep(json, stateDescription);
-    int newValue = min(maxValue, currentState + step);
+    float maxValue = !json["maxValue"].isNull()
+                         ? json["maxValue"].as<String>().toFloat()
+                         : (!stateDescription["minimum"].isNull()
+                                ? stateDescription["maximum"].as<String>().toFloat()
+                                : 100);
+    float step = getStep(json, stateDescription);
+    float newValue = min(maxValue, currentState + step);
     postValue(json["item"]["link"], String(newValue));
     return maxValue != currentState;
 }
@@ -831,15 +831,15 @@ boolean sendMinusTouch(M5PanelUIElement *touchedElement)
 {
     log_d("send touch on minus");
     JsonObject json = touchedElement->json;
-    int currentState = json["item"]["state"].as<String>().toInt();
+    float currentState = json["item"]["state"].as<String>().toFloat();
     JsonObject stateDescription = json["item"]["stateDescription"];
-    int minValue = !json["minValue"].isNull()
-                       ? json["minValue"].as<String>().toInt()
-                       : (!stateDescription["minimum"].isNull()
-                              ? stateDescription["minimum"].as<String>().toInt()
-                              : 0);
-    int step = getStep(json, stateDescription);
-    int newValue = max(minValue, currentState - step);
+    float minValue = !json["minValue"].isNull()
+                         ? json["minValue"].as<String>().toFloat()
+                         : (!stateDescription["minimum"].isNull()
+                                ? stateDescription["minimum"].as<String>().toFloat()
+                                : 0);
+    float step = getStep(json, stateDescription);
+    float newValue = max(minValue, currentState - step);
     postValue(json["item"]["link"], String(newValue));
     return minValue != currentState;
 }

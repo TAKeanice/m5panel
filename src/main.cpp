@@ -68,6 +68,12 @@ bool httpRequest(String &url, String &response)
     log_d("httpRequest: HTTP request to %s", String(url).c_str());
     if (WiFi.status() != WL_CONNECTED)
     {
+        WiFi.reconnect();
+    }
+
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        //attempted to reconnect but it did not work - give up.
         log_d(ERR_WIFI_NOT_CONNECTED);
         response = String(ERR_WIFI_NOT_CONNECTED);
         return false;
@@ -119,17 +125,23 @@ DynamicJsonDocument subscribePage(String pageId)
 {
     String sitemapPageId = getSitemapPageId(pageId);
     String pageUpdate;
-    httpRequest(restUrl + "/sitemaps/" + OPENHAB_SITEMAP + "/" + sitemapPageId + "?subscriptionid=" + subscriptionId, pageUpdate);
-
     DynamicJsonDocument jsonData(30000);
-    deserializeJson(jsonData, pageUpdate);
-
+    if (httpRequest(restUrl + "/sitemaps/" + OPENHAB_SITEMAP + "/" + sitemapPageId + "?subscriptionid=" + subscriptionId, pageUpdate))
+    {
+        deserializeJson(jsonData, pageUpdate);
+    }
     return jsonData;
 }
 
 void updateAndSubscribePage(M5PanelPage *page)
 {
     DynamicJsonDocument jsonData = subscribePage(page->identifier);
+
+    if (jsonData.isNull())
+    {
+        return;
+    }
+
     page->updateAllWidgets(jsonData);
     jsonData.clear();
 }
@@ -137,6 +149,11 @@ void updateAndSubscribePage(M5PanelPage *page)
 void updateAndSubscribeCurrentPage()
 {
     DynamicJsonDocument jsonData = subscribePage(currentPage);
+
+    if (jsonData.isNull())
+    {
+        return;
+    }
 
     JsonArray widgets = jsonData["widgets"];
     for (size_t i = 0; i < widgets.size(); i++)
@@ -150,6 +167,12 @@ void updateAndSubscribeCurrentPage()
 
 bool subscribe()
 {
+
+    if (WiFi.status() != WL_CONNECTED)
+    {
+        WiFi.reconnect();
+    }
+
     String subscribeResponse;
 
     WiFiClient wifiClient;
