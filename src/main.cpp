@@ -68,12 +68,14 @@ bool httpRequest(String &url, String &response)
     log_d("httpRequest: HTTP request to %s", String(url).c_str());
     if (WiFi.status() != WL_CONNECTED)
     {
+        log_d("reconnect wifi");
         WiFi.reconnect();
     }
 
     if (WiFi.status() != WL_CONNECTED)
     {
-        //attempted to reconnect but it did not work - give up.
+        // attempted to reconnect but it did not work - give up.
+        log_d("wifi not connected, abort request");
         log_d(ERR_WIFI_NOT_CONNECTED);
         response = String(ERR_WIFI_NOT_CONNECTED);
         return false;
@@ -125,10 +127,10 @@ DynamicJsonDocument subscribePage(String pageId)
 {
     String sitemapPageId = getSitemapPageId(pageId);
     String pageUpdate;
-    DynamicJsonDocument jsonData(30000);
+    DynamicJsonDocument jsonData(60000);
     if (httpRequest(restUrl + "/sitemaps/" + OPENHAB_SITEMAP + "/" + sitemapPageId + "?subscriptionid=" + subscriptionId, pageUpdate))
     {
-        deserializeJson(jsonData, pageUpdate);
+        deserializeJson(jsonData, pageUpdate, DeserializationOption::NestingLimit(50));
     }
     return jsonData;
 }
@@ -170,6 +172,7 @@ bool subscribe()
 
     if (WiFi.status() != WL_CONNECTED)
     {
+        log_d("reconnect wifi");
         WiFi.reconnect();
     }
 
@@ -251,8 +254,8 @@ void updateSiteMap()
 
 void parseSubscriptionData(String jsonDataStr)
 {
-    DynamicJsonDocument jsonData(30000);
-    deserializeJson(jsonData, jsonDataStr);
+    DynamicJsonDocument jsonData(60000);
+    deserializeJson(jsonData, jsonDataStr, DeserializationOption::NestingLimit(50));
     log_d("parseSubscriptionData: %s", jsonDataStr.c_str());
     if (!jsonData["widgetId"].isNull()) // Data Widget (subscription)
     {
@@ -346,7 +349,6 @@ boolean readSavedState()
         currentPage = savedState.readString();
         log_d("readSavedState: read current page from saved file: %s", currentPage.c_str());
         savedState.close();
-        LittleFS.remove(SAVED_STATE_FILE);
         return true;
     }
     else
@@ -411,6 +413,10 @@ void checkTouch()
                     if (oldPageChoicesIdx < 0 && newPageChoicesIdx < 0) // no subscription update if navigating from / to choices
                     {
                         updateAndSubscribePage(newPage);
+                    }
+                    else
+                    {
+                        log_d("no re-fetch of page due to navigation from / to choices");
                     }
                     newPage->draw(&touchCanvas);
 
