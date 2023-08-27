@@ -9,6 +9,7 @@
 #include "M5PanelUI.h"
 #include "defs.h"
 #include "ImageResource.h"
+#include "FontSizes.h"
 
 #define SAVED_STATE_FILE "/savedState"
 #define TIME_UNTIL_SLEEP 120
@@ -237,7 +238,7 @@ void updateSiteMap()
     delete rootPage;
 
     JsonObject rootPageJson = jsonDoc.as<JsonObject>()["homepage"];
-    rootPage = new M5PanelPage(rootPageJson);
+    rootPage = new M5PanelPage(NULL, rootPageJson);
     log_d("updateSiteMap: current page: %s", currentPage.c_str());
     if (currentPage == "")
     {
