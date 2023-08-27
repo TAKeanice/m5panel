@@ -8,8 +8,8 @@
 #include <regex>
 #include "M5PanelUI.h"
 #include "defs.h"
-#include "ImageResource.h"
 #include "FontSizes.h"
+#include "M5PanelUIStatusArea.h"
 
 #define SAVED_STATE_FILE "/savedState"
 #define TIME_UNTIL_SLEEP 120
@@ -33,6 +33,8 @@ DynamicJsonDocument jsonDoc(60000); // size to be checked
 
 M5PanelPage *rootPage = NULL;
 String currentPage = "" + String(OPENHAB_SITEMAP) + "_0";
+
+M5PanelStatusArea statusArea;
 
 #define PAGE_CHANGE_WAIT 10000
 SemaphoreHandle_t pageChangeSemaphore = xSemaphoreCreateBinary();
@@ -436,50 +438,6 @@ void checkTouch()
     }
 }
 
-void showBatteryIndicator()
-{
-    M5.BatteryADCBegin();
-
-    touchCanvas.createCanvas(150, 40);
-
-    int img_y = 5;
-    int img_x = 40;
-    int img_height = 32;
-    int img_width = 32;
-
-    touchCanvas.pushImage(img_x, img_y, 32, 32, ImageResource_status_bar_battery_32x32);
-    uint32_t vol = M5.getBatteryVoltage();
-
-    if (vol < 3300)
-    {
-        vol = 3300;
-    }
-    else if (vol > 4350)
-    {
-        vol = 4350;
-    }
-    float battery = (float)(vol - 3300) / (float)(4350 - 3300);
-    if (battery <= 0.01)
-    {
-        battery = 0.01;
-    }
-    if (battery > 1)
-    {
-        battery = 1;
-    }
-    uint8_t px = battery * 25;
-    char buf[5];
-    sprintf(buf, "%d%%", (int)(battery * 100));
-    touchCanvas.fillRect(img_x + 3, img_y + 10, px, 13, 15);
-
-    touchCanvas.setTextDatum(ML_DATUM);
-    touchCanvas.setTextSize(FONT_SIZE_LABEL_SMALL);
-    touchCanvas.drawString(buf, img_x + img_width + 5, img_y + img_height / 2);
-    touchCanvas.pushCanvas(0, 500, UPDATE_MODE_GLD16);
-
-    touchCanvas.deleteCanvas();
-}
-
 void showWakeUpIndicator()
 {
     touchCanvas.createCanvas(400, 15);
@@ -514,7 +472,7 @@ void shutdown()
     // TODO draw hint for wakeup by button press
     // TODO configure to wake up from side button if possible
 
-    showBatteryIndicator();
+    statusArea.showBatteryIndicator(&touchCanvas);
 
     showWakeUpIndicator();
 
